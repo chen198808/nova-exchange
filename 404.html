@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NovaExchange - 中心化加密货币交易所</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: #0a0e17;
+        color: #e4e7ed;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      .loading {
+        text-align: center;
+      }
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #1e3a5f;
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>正在加载 NovaExchange...</p>
+    </div>
+    <script>
+      (function() {
+        var pathname = window.location.pathname;
+        var search = window.location.search || '';
+        var hash = window.location.hash || '';
+        
+        // 获取基准路径（GitHub Pages 仓库路径）
+        var pathParts = pathname.split('/').filter(Boolean);
+        var basePath = '';
+        var appPath = '';
+        
+        if (pathParts.length > 0) {
+          basePath = '/' + pathParts[0] + '/';
+          if (pathParts.length > 1) {
+            appPath = pathParts.slice(1).join('/');
+          }
+        } else {
+          basePath = '/';
+          appPath = pathParts.join('/');
+        }
+        
+        // 如果已经有 hash，说明是 hash 路由，直接跳转到 index.html
+        if (hash && hash.startsWith('#/')) {
+          window.location.replace(basePath + hash + search);
+          return;
+        }
+        
+        // 否则，把路径转换为 hash 路由
+        var targetHash = '#/' + appPath;
+        if (targetHash === '#/') {
+          targetHash = '#/';
+        }
+        
+        window.location.replace(basePath + targetHash + search);
+      })();
+    </script>
+  </body>
+</html>
