@@ -64,17 +64,14 @@ router.get('/balances', authMiddleware, (req: AuthRequest, res: Response) => {
 
 router.get('/deposit-address', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
-    const wallet = db
-      .prepare('SELECT address FROM user_wallets WHERE user_id = ? AND chain = ?')
-      .get(req.user!.id, 'solana') as any;
-
-    if (!wallet) {
-      res.status(404).json({ error: 'Wallet not found' });
+    const hotWallet = getHotWallet();
+    if (!hotWallet) {
+      res.status(500).json({ error: 'Hot wallet not configured' });
       return;
     }
 
     res.json({
-      address: wallet.address,
+      address: hotWallet.publicKey,
       chain: 'solana',
     });
   } catch (error) {
@@ -98,12 +95,9 @@ router.post('/deposit/verify', authMiddleware, async (req: AuthRequest, res: Res
       return;
     }
 
-    const wallet = db
-      .prepare('SELECT address FROM user_wallets WHERE user_id = ? AND chain = ?')
-      .get(req.user!.id, 'solana') as any;
-
-    if (!wallet) {
-      res.status(404).json({ error: 'Wallet not found' });
+    const hotWallet = getHotWallet();
+    if (!hotWallet) {
+      res.status(500).json({ error: 'Hot wallet not configured' });
       return;
     }
 
@@ -122,7 +116,7 @@ router.post('/deposit/verify', authMiddleware, async (req: AuthRequest, res: Res
 
     if (tx && tx.status === 'success' && tx.data) {
       for (const transfer of tx.data) {
-        if (transfer.to === wallet.address && transfer.token_mint === token.mint) {
+        if (transfer.to === hotWallet.publicKey && transfer.token_mint === token.mint) {
           amount += Number(transfer.amount) / Math.pow(10, token.decimals);
           fromAddress = transfer.from;
         }
@@ -141,7 +135,7 @@ router.post('/deposit/verify', authMiddleware, async (req: AuthRequest, res: Res
       .prepare(
         'INSERT INTO deposits (user_id, asset, amount, tx_id, from_address, to_address, status, confirmations, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       )
-      .run(userId, asset, amount, txId, fromAddress, wallet.address, 'confirmed', 32, now, now);
+      .run(userId, asset, amount, txId, fromAddress, hotWallet.publicKey, 'confirmed', 32, now, now);
 
     const updateBalance = db.prepare(
       'UPDATE balances SET free = free + ?, total = total + ?, updated_at = ? WHERE user_id = ? AND asset = ?'

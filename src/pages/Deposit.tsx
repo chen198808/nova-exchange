@@ -6,38 +6,39 @@ import { useMarketStore } from '@/store/marketStore'
 import { formatTime, formatAmount } from '@/utils/format'
 import { cn } from '@/lib/utils'
 import type { DepositRecord, RecordStatus } from '@/types'
+import { api } from '@/services/api'
 
-const chains: Record<string, { name: string; address: string; minDeposit: number; confirmations: number }[]> = {
+const chainsBase: Record<string, { name: string; minDeposit: number; confirmations: number }[]> = {
   USDT: [
-    { name: 'Solana', address: '9rGfe8WuFhNbK7Yq2cV3pR4tS6wX8yZ1aD2eF3gH4iJ5', minDeposit: 10, confirmations: 12 },
-    { name: 'ERC20', address: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', minDeposit: 20, confirmations: 6 },
+    { name: 'Solana', minDeposit: 10, confirmations: 12 },
+    { name: 'ERC20', minDeposit: 20, confirmations: 6 },
   ],
   BTC: [
-    { name: 'Bitcoin', address: 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq', minDeposit: 0.001, confirmations: 6 },
+    { name: 'Bitcoin', minDeposit: 0.001, confirmations: 6 },
   ],
   ETH: [
-    { name: 'ERC20', address: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', minDeposit: 0.01, confirmations: 12 },
+    { name: 'ERC20', minDeposit: 0.01, confirmations: 12 },
   ],
   SOL: [
-    { name: 'Solana', address: '9rGfe8WuFhNbK7Yq2cV3pR4tS6wX8yZ1aD2eF3gH4iJ5', minDeposit: 0.1, confirmations: 12 },
+    { name: 'Solana', minDeposit: 0.1, confirmations: 12 },
   ],
   RS: [
-    { name: 'Solana', address: 'GAswtBAGV5NybYWN7YX9aTuJNkps4uft4Qjb4N31bonk', minDeposit: 100, confirmations: 12 },
+    { name: 'Solana', minDeposit: 100, confirmations: 12 },
   ],
   BNB: [
-    { name: 'BEP20', address: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', minDeposit: 0.05, confirmations: 6 },
+    { name: 'BEP20', minDeposit: 0.05, confirmations: 6 },
   ],
   XRP: [
-    { name: 'XRP Ledger', address: 'rDnaX9nq3fH7jwFEarX8fQ9Y2a4Z6b8c1d', minDeposit: 10, confirmations: 6 },
+    { name: 'XRP Ledger', minDeposit: 10, confirmations: 6 },
   ],
   DOGE: [
-    { name: 'Dogecoin', address: 'D6X8Yz5a3b9c2d4e6f8g0h1i2j3k4l5m6n', minDeposit: 50, confirmations: 6 },
+    { name: 'Dogecoin', minDeposit: 50, confirmations: 6 },
   ],
   ADA: [
-    { name: 'Cardano', address: 'addr1q80lkjhgfdsapoiuytrewqazxcvbnm', minDeposit: 5, confirmations: 15 },
+    { name: 'Cardano', minDeposit: 5, confirmations: 15 },
   ],
   AVAX: [
-    { name: 'Avalanche C-Chain', address: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', minDeposit: 0.5, confirmations: 6 },
+    { name: 'Avalanche C-Chain', minDeposit: 0.5, confirmations: 6 },
   ],
 }
 
@@ -51,19 +52,35 @@ export default function Deposit() {
   const [selectedChainIndex, setSelectedChainIndex] = useState(0)
   const [copied, setCopied] = useState(false)
   const [showAssetDropdown, setShowAssetDropdown] = useState(false)
+  const [depositAddress, setDepositAddress] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
 
-  const availableAssets = Object.keys(chains)
+  const availableAssets = Object.keys(chainsBase)
 
   useEffect(() => {
     const asset = searchParams.get('asset')
-    if (asset && chains[asset]) {
+    if (asset && chainsBase[asset]) {
       setSelectedAsset(asset)
       setSelectedChainIndex(0)
     }
   }, [searchParams])
 
-  const chainOptions = chains[selectedAsset] || [defaultChain]
-  const currentChain = chainOptions[selectedChainIndex] || defaultChain
+  useEffect(() => {
+    const fetchDepositAddress = async () => {
+      try {
+        const data = await api.assets.getDepositAddress()
+        setDepositAddress(data.address)
+      } catch (error) {
+        console.error('Failed to fetch deposit address:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchDepositAddress()
+  }, [])
+
+  const chainOptions = chainsBase[selectedAsset] || [{ name: 'Solana', minDeposit: 10, confirmations: 12 }]
+  const currentChain = chainOptions[selectedChainIndex] || { name: 'Solana', minDeposit: 10, confirmations: 12 }
 
   const getCoinInfo = (symbol: string) => {
     return coins.find(c => c.symbol === symbol)
@@ -75,7 +92,7 @@ export default function Deposit() {
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(currentChain.address)
+      await navigator.clipboard.writeText(depositAddress)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
@@ -220,17 +237,26 @@ export default function Deposit() {
                 <div className="flex-1 w-full">
                   <div className="text-text-tertiary text-sm mb-2">{currentChain.name} 网络</div>
                   <div className="flex items-start gap-2 mb-3">
-                    <code className="flex-1 text-sm text-text-primary bg-background-card border border-border rounded-lg p-3 break-all font-mono">
-                      {currentChain.address}
-                    </code>
+                    {isLoading ? (
+                      <div className="flex-1 text-sm text-text-secondary bg-background-card border border-border rounded-lg p-3">
+                        加载中...
+                      </div>
+                    ) : (
+                      <code className="flex-1 text-sm text-text-primary bg-background-card border border-border rounded-lg p-3 break-all font-mono">
+                        {depositAddress}
+                      </code>
+                    )}
                   </div>
                   <button
                     onClick={handleCopy}
+                    disabled={!depositAddress}
                     className={cn(
                       "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
                       copied
                         ? "bg-success/10 text-success"
-                        : "bg-primary/10 text-primary hover:bg-primary/20"
+                        : depositAddress
+                          ? "bg-primary/10 text-primary hover:bg-primary/20"
+                          : "bg-background-lighter text-text-tertiary cursor-not-allowed"
                     )}
                   >
                     {copied ? (
