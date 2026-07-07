@@ -139,31 +139,48 @@ router.post('/quote', authMiddleware, async (req: AuthRequest, res: Response) =>
     let outAmount = 0;
     let price = 0;
     let fee = 0;
+    let priceSource = 'internal';
 
-    const quote = await getJupiterQuote(
-      inputToken.mint,
-      outputToken.mint,
-      amount,
-      slippage || 50
-    ).catch(() => null);
+    const inputPriceFixed = inputToken.fixedPrice;
+    const outputPriceFixed = outputToken.fixedPrice;
 
-    if (quote && quote.outAmount) {
-      const outDecimals = outputToken.decimals;
-      outAmount = Number(quote.outAmount) / Math.pow(10, outDecimals);
-      price = outAmount / amount;
-      fee = Number(quote.routePlan?.[0]?.swapInfo?.feeAmount || 0) / 1e9;
+    if (inputPriceFixed !== undefined && outputPriceFixed !== undefined && outputPriceFixed > 0) {
+      price = inputPriceFixed / outputPriceFixed;
+      outAmount = amount * price;
+      fee = amount * 0.001;
+      priceSource = 'internal';
+      console.log(`[Quote] Using internal price: ${inputAsset} -> ${outputAsset}, price=${price}`);
     } else {
-      const inputPrice = await getPriceInUSDT(inputAsset);
-      const outputPrice = await getPriceInUSDT(outputAsset);
-      
-      if (inputPrice !== null && outputPrice !== null && outputPrice > 0) {
-        price = inputPrice / outputPrice;
-        outAmount = amount * price;
-        fee = amount * 0.001;
+      const quote = await getJupiterQuote(
+        inputToken.mint,
+        outputToken.mint,
+        amount,
+        slippage || 50
+      ).catch(() => null);
+
+      if (quote && quote.outAmount) {
+        const outDecimals = outputToken.decimals;
+        outAmount = Number(quote.outAmount) / Math.pow(10, outDecimals);
+        price = outAmount / amount;
+        fee = Number(quote.routePlan?.[0]?.swapInfo?.feeAmount || 0) / 1e9;
+        priceSource = 'jupiter';
+        console.log(`[Quote] Using Jupiter price: ${inputAsset} -> ${outputAsset}, price=${price}`);
+      } else {
+        const inputPrice = await getPriceInUSDT(inputAsset);
+        const outputPrice = await getPriceInUSDT(outputAsset);
+        
+        if (inputPrice !== null && outputPrice !== null && outputPrice > 0) {
+          price = inputPrice / outputPrice;
+          outAmount = amount * price;
+          fee = amount * 0.001;
+          priceSource = 'fallback';
+          console.log(`[Quote] Using fallback price: ${inputAsset} -> ${outputAsset}, price=${price}`);
+        }
       }
     }
 
     if (outAmount <= 0 || price <= 0) {
+      console.error(`[Quote] Failed to get quote for ${inputAsset} -> ${outputAsset}, amount=${amount}`);
       res.status(500).json({ error: 'Failed to get quote' });
       return;
     }
@@ -176,6 +193,7 @@ router.post('/quote', authMiddleware, async (req: AuthRequest, res: Response) =>
       price,
       slippage: (slippage || 50) / 100,
       fee,
+      priceSource,
     });
   } catch (error) {
     console.error('Quote error:', error);
@@ -217,27 +235,38 @@ router.post('/swap', authMiddleware, async (req: AuthRequest, res: Response) => 
       return;
     }
 
-    const quote = await getJupiterQuote(
-      inputToken.mint,
-      outputToken.mint,
-      amount,
-      slippage || 50
-    ).catch(() => null);
-
     let outAmount = 0;
     let price = 0;
 
-    if (quote && quote.outAmount) {
-      const outDecimals = outputToken.decimals;
-      outAmount = Number(quote.outAmount) / Math.pow(10, outDecimals);
-      price = outAmount / amount;
+    const inputPriceFixed = inputToken.fixedPrice;
+    const outputPriceFixed = outputToken.fixedPrice;
+
+    if (inputPriceFixed !== undefined && outputPriceFixed !== undefined && outputPriceFixed > 0) {
+      price = inputPriceFixed / outputPriceFixed;
+      outAmount = amount * price;
+      console.log(`[Swap] Using internal price: ${inputAsset} -> ${outputAsset}, price=${price}`);
     } else {
-      const inputPrice = await getPriceInUSDT(inputAsset);
-      const outputPrice = await getPriceInUSDT(outputAsset);
-      
-      if (inputPrice !== null && outputPrice !== null && outputPrice > 0) {
-        price = inputPrice / outputPrice;
-        outAmount = amount * price;
+      const quote = await getJupiterQuote(
+        inputToken.mint,
+        outputToken.mint,
+        amount,
+        slippage || 50
+      ).catch(() => null);
+
+      if (quote && quote.outAmount) {
+        const outDecimals = outputToken.decimals;
+        outAmount = Number(quote.outAmount) / Math.pow(10, outDecimals);
+        price = outAmount / amount;
+        console.log(`[Swap] Using Jupiter price: ${inputAsset} -> ${outputAsset}, price=${price}`);
+      } else {
+        const inputPrice = await getPriceInUSDT(inputAsset);
+        const outputPrice = await getPriceInUSDT(outputAsset);
+        
+        if (inputPrice !== null && outputPrice !== null && outputPrice > 0) {
+          price = inputPrice / outputPrice;
+          outAmount = amount * price;
+          console.log(`[Swap] Using fallback price: ${inputAsset} -> ${outputAsset}, price=${price}`);
+        }
       }
     }
 
