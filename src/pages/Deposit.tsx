@@ -90,40 +90,26 @@ export default function Deposit() {
     return balances.find(b => b.asset === asset)?.free || 0
   }
 
-  const handleCopy = () => {
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
     try {
-      if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(depositAddress).then(() => {
-          setCopied(true)
-          setTimeout(() => setCopied(false), 2000)
-        }).catch(() => {
-          fallbackCopy(depositAddress)
-        })
-      } else {
-        fallbackCopy(depositAddress)
-      }
-    } catch (err) {
-      console.error('Failed to copy:', err)
-    }
-  }
-
-  const fallbackCopy = (text: string) => {
-    const textArea = document.createElement('textarea')
-    textArea.value = text
-    textArea.style.position = 'fixed'
-    textArea.style.left = '-999999px'
-    textArea.style.top = '-999999px'
-    document.body.appendChild(textArea)
-    textArea.focus()
-    textArea.select()
-    try {
+      const textArea = document.createElement('textarea')
+      textArea.value = depositAddress
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-99999px'
+      textArea.style.top = '-99999px'
+      textArea.style.opacity = '0'
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
       document.execCommand('copy')
+      document.body.removeChild(textArea)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      console.error('Fallback copy failed:', err)
+      console.error('Copy failed:', err)
     }
-    document.body.removeChild(textArea)
   }
 
   const getStatusInfo = (status: RecordStatus) => {
@@ -268,7 +254,22 @@ export default function Deposit() {
                         加载中...
                       </div>
                     ) : (
-                      <code className="flex-1 text-sm text-text-primary bg-background-card border border-border rounded-lg p-3 break-all font-mono">
+                      <code
+                        className="flex-1 text-sm text-text-primary bg-background-card border border-border rounded-lg p-3 break-all font-mono select-all cursor-pointer hover:border-primary/50 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          try {
+                            const range = document.createRange()
+                            range.selectNodeContents(e.currentTarget)
+                            const selection = window.getSelection()
+                            selection?.removeAllRanges()
+                            selection?.addRange(range)
+                          } catch (err) {
+                            console.error('Select failed:', err)
+                          }
+                        }}
+                        title="点击选中文本"
+                      >
                         {depositAddress}
                       </code>
                     )}
