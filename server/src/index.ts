@@ -32,6 +32,11 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -44,10 +49,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/trading', tradingRoutes);
 app.use('/api/okx', okxRoutes);
-
-app.use('/api/*', (req, res) => {
-  res.status(404).json({ error: 'API endpoint not found' });
-});
 
 // Serve static files from dist directory
 const distPathDev = path.resolve(path.join(__dirname, '..', '..', 'dist'));
