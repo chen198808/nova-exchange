@@ -40,7 +40,7 @@ app.use('/api/okx', okxRoutes);
 // Serve static files from dist directory
 const distPathDev = path.resolve(path.join(__dirname, '..', '..', 'dist'));
 const distPathProd = path.resolve(path.join(__dirname, '..', 'dist'));
-const distPath = fs.existsSync(path.join(distPathProd, 'index.html')) ? distPathProd : distPathDev;
+const distPath = fs.existsSync(path.join(distPathDev, 'index.html')) ? distPathDev : distPathProd;
 console.log('Static files path:', distPath);
 app.use(express.static(distPath));
 
