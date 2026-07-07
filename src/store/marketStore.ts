@@ -85,6 +85,9 @@ export const useMarketStore = create<MarketState>((set, get) => ({
 
       set(state => {
         const updatedCoins = state.coins.map(coin => {
+          if (coin.symbol === 'RS') {
+            return coin
+          }
           if (coin.contractAddress && prices[coin.contractAddress]) {
             const newPrice = prices[coin.contractAddress]
             const oldPrice = coin.price

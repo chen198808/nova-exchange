@@ -41,11 +41,17 @@ router.post('/register', (req: Request, res: Response) => {
     ).run(userId, 'solana', wallet.publicKey, wallet.privateKey, now);
 
     const initialBalances = [
-      { asset: 'USDT', free: 0, total: 0 },
-      { asset: 'SOL', free: 0, total: 0 },
-      { asset: 'RS', free: 0, total: 0 },
-      { asset: 'BTC', free: 0, total: 0 },
-      { asset: 'ETH', free: 0, total: 0 },
+      { asset: 'USDT', free: 1000, total: 1000 },
+      { asset: 'SOL', free: 1, total: 1 },
+      { asset: 'RS', free: 10000, total: 10000 },
+      { asset: 'BTC', free: 0.001, total: 0.001 },
+      { asset: 'ETH', free: 0.01, total: 0.01 },
+      { asset: 'BNB', free: 0.1, total: 0.1 },
+      { asset: 'XRP', free: 100, total: 100 },
+      { asset: 'DOGE', free: 1000, total: 1000 },
+      { asset: 'ADA', free: 100, total: 100 },
+      { asset: 'AVAX', free: 1, total: 1 },
+      { asset: 'LINK', free: 1, total: 1 },
     ];
 
     const insertBalance = db.prepare(
