@@ -7,6 +7,7 @@ import {
   getTokenBalance,
   transferToken,
   transferSOL,
+  getConnection,
 } from '../services/solanaService';
 
 const router = Router();
@@ -107,24 +108,59 @@ router.post('/deposit/verify', authMiddleware, async (req: AuthRequest, res: Res
       return;
     }
 
-    const tx: any = await fetch(`https://api.solana.fm/v0/transfers/${txId}`)
-      .then(r => r.json())
-      .catch(() => null);
-
     let amount = 0;
     let fromAddress = '';
 
-    if (tx && tx.status === 'success' && tx.data) {
-      for (const transfer of tx.data) {
-        if (transfer.to === hotWallet.publicKey && transfer.token_mint === token.mint) {
-          amount += Number(transfer.amount) / Math.pow(10, token.decimals);
-          fromAddress = transfer.from;
+    try {
+      const conn = getConnection();
+      const tx = await conn.getTransaction(txId, {
+        maxSupportedTransactionVersion: 0,
+        commitment: 'confirmed',
+      });
+
+      if (tx && tx.meta && tx.meta.postTokenBalances && tx.meta.preTokenBalances) {
+        const hotWalletPubkey = hotWallet.publicKey;
+
+        for (const postBal of tx.meta.postTokenBalances) {
+          if (postBal.mint === token.mint && postBal.owner === hotWalletPubkey) {
+            const preBal = tx.meta.preTokenBalances.find(
+              (b: any) => b.mint === token.mint && b.owner === hotWalletPubkey
+            );
+            const preAmount = preBal ? Number(preBal.uiTokenAmount.amount) : 0;
+            const postAmount = Number(postBal.uiTokenAmount.amount);
+            const diff = postAmount - preAmount;
+            if (diff > 0) {
+              amount = diff / Math.pow(10, postBal.uiTokenAmount.decimals || token.decimals);
+            }
+          }
+        }
+
+        if (amount > 0 && tx.transaction && tx.transaction.message) {
+          const accountKeys = tx.transaction.message.getAccountKeys();
+          if (accountKeys && accountKeys.length > 0) {
+            fromAddress = accountKeys[0].toBase58();
+          }
+        }
+      }
+    } catch (rpcError) {
+      console.warn('RPC verification failed, trying solana.fm...', rpcError);
+      
+      const tx: any = await fetch(`https://api.solana.fm/v0/transfers/${txId}`)
+        .then(r => r.json())
+        .catch(() => null);
+
+      if (tx && tx.status === 'success' && tx.data) {
+        for (const transfer of tx.data) {
+          if (transfer.to === hotWallet.publicKey && transfer.token_mint === token.mint) {
+            amount += Number(transfer.amount) / Math.pow(10, token.decimals);
+            fromAddress = transfer.from;
+          }
         }
       }
     }
 
     if (amount <= 0) {
-      res.status(400).json({ error: 'No valid transfer found in transaction' });
+      res.status(400).json({ error: '未找到有效的充值转账，请检查交易哈希和充值地址是否正确' });
       return;
     }
 
@@ -151,7 +187,7 @@ router.post('/deposit/verify', authMiddleware, async (req: AuthRequest, res: Res
     });
   } catch (error) {
     console.error('Deposit verify error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: '验证失败，请稍后重试' });
   }
 });
 

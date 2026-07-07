@@ -166,3 +166,18 @@ export function getHotWallet(): { publicKey: string; privateKey: string } | null
     privateKey,
   };
 }
+
+export async function ensureTokenAccount(privateKeyBase58: string, mintAddress: string): Promise<string> {
+  const conn = getConnection();
+  const fromKeypair = getKeypairFromPrivateKey(privateKeyBase58);
+  const mintPubkey = new PublicKey(mintAddress);
+
+  const tokenAccount = await getOrCreateAssociatedTokenAccount(
+    conn,
+    fromKeypair,
+    mintPubkey,
+    fromKeypair.publicKey
+  );
+
+  return tokenAccount.address.toBase58();
+}
