@@ -9,6 +9,7 @@ const TOKENS: Record<string, { mint: string; decimals: number; priceMint: string
     mint: 'So11111111111111111111111111111111111111112',
     decimals: 9,
     priceMint: 'So11111111111111111111111111111111111111112',
+    fixedPrice: 168.5,
   },
   USDT: {
     mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
@@ -26,11 +27,13 @@ const TOKENS: Record<string, { mint: string; decimals: number; priceMint: string
     mint: '9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E',
     decimals: 8,
     priceMint: '9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E',
+    fixedPrice: 62000,
   },
   ETH: {
     mint: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs',
     decimals: 8,
     priceMint: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs',
+    fixedPrice: 3500,
   },
 };
 

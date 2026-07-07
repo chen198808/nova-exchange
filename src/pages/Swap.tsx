@@ -23,6 +23,7 @@ function SwapPage() {
   const [loading, setLoading] = useState(false)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [slippage, setSlippage] = useState(0.5)
+  const [quoteError, setQuoteError] = useState<string | null>(null)
 
   const fromBalance = getBalance(fromToken)?.free || 0
   const toBalance = getBalance(toToken)?.free || 0
@@ -46,14 +47,22 @@ function SwapPage() {
     if (!fromAmount || parseFloat(fromAmount) <= 0) return
     
     setQuoteLoading(true)
+    setQuoteError(null)
     try {
       const result = await getQuote(fromToken, toToken, parseFloat(fromAmount), slippage * 100)
       if (result) {
         setToAmount(result.outputAmount?.toFixed(6) || '')
         setPrice(result.price || null)
+      } else {
+        setQuoteError('获取报价失败，请稍后重试')
+        setToAmount('')
+        setPrice(null)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Quote error:', error)
+      setQuoteError(error.message || '获取报价失败，请稍后重试')
+      setToAmount('')
+      setPrice(null)
     } finally {
       setQuoteLoading(false)
     }
@@ -196,6 +205,17 @@ function SwapPage() {
                 <span className="font-medium text-gray-900 dark:text-white">
                   1 {fromToken} = {price.toFixed(6)} {toToken}
                 </span>
+              </div>
+            </div>
+          )}
+
+          {quoteError && (
+            <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertCircle size={18} className="text-red-500 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-red-700 dark:text-red-400">
+                  {quoteError}
+                </div>
               </div>
             </div>
           )}
