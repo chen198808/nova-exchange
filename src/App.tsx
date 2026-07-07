@@ -13,31 +13,34 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Swap from "@/pages/Swap";
 import OKXMarkets from "@/pages/OKXMarkets";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+    <ErrorBoundary>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-        <Route element={<Layout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/trade/:pair" element={<SpotTrade />} />
-          <Route path="/futures/:pair" element={<FuturesTrade />} />
-          <Route path="/markets" element={<Markets />} />
-          <Route path="/okx" element={<OKXMarkets />} />
-          <Route path="/swap" element={<Swap />} />
-          <Route path="/risk" element={<RiskCenter />} />
+          <Route element={<Layout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/trade/:pair" element={<SpotTrade />} />
+            <Route path="/futures/:pair" element={<FuturesTrade />} />
+            <Route path="/markets" element={<Markets />} />
+            <Route path="/okx" element={<OKXMarkets />} />
+            <Route path="/swap" element={<Swap />} />
+            <Route path="/risk" element={<RiskCenter />} />
 
-          <Route path="/assets" element={<AssetsOverview />}>
-            <Route index element={<Deposit />} />
-            <Route path="deposit" element={<Deposit />} />
-            <Route path="withdraw" element={<Withdraw />} />
-            <Route path="history" element={<History />} />
+            <Route path="/assets" element={<AssetsOverview />}>
+              <Route index element={<Deposit />} />
+              <Route path="deposit" element={<Deposit />} />
+              <Route path="withdraw" element={<Withdraw />} />
+              <Route path="history" element={<History />} />
+            </Route>
           </Route>
-        </Route>
-      </Routes>
-    </Router>
+        </Routes>
+      </Router>
+    </ErrorBoundary>
   );
 }

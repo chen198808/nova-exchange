@@ -54,6 +54,9 @@ export default function Deposit() {
   const [showAssetDropdown, setShowAssetDropdown] = useState(false)
   const [depositAddress, setDepositAddress] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [verifyTxId, setVerifyTxId] = useState('')
+  const [verifying, setVerifying] = useState(false)
+  const [verifyMsg, setVerifyMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const availableAssets = Object.keys(chainsBase)
 
@@ -88,6 +91,26 @@ export default function Deposit() {
 
   const getBalance = (asset: string) => {
     return balances.find(b => b.asset === asset)?.free || 0
+  }
+
+  const handleVerifyDeposit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!verifyTxId.trim() || verifying) return
+
+    setVerifying(true)
+    setVerifyMsg(null)
+    try {
+      const result: any = await api.assets.verifyDeposit(verifyTxId.trim(), selectedAsset)
+      setVerifyMsg({ type: 'success', text: `充值成功！到账 ${result.amount} ${selectedAsset}` })
+      setVerifyTxId('')
+      const { fetchBalances, fetchDepositRecords } = useUserStore.getState()
+      fetchBalances()
+      fetchDepositRecords()
+    } catch (err: any) {
+      setVerifyMsg({ type: 'error', text: err.message || '验证失败，请检查交易哈希是否正确' })
+    } finally {
+      setVerifying(false)
+    }
   }
 
   const handleCopy = (e: React.MouseEvent) => {
@@ -316,6 +339,49 @@ export default function Deposit() {
                 </ul>
               </div>
             </div>
+          </div>
+
+          <div className="bg-background-card border border-border rounded-xl p-6">
+            <h3 className="text-lg font-bold text-text-primary mb-4 flex items-center gap-2">
+              <CircleCheck className="w-5 h-5 text-success" />
+              充值验证
+            </h3>
+            <p className="text-sm text-text-secondary mb-4">
+              转账后，请在下方输入交易哈希（txId）进行验证，验证成功后资产将自动到账。
+            </p>
+            <form onSubmit={handleVerifyDeposit}>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={verifyTxId}
+                  onChange={(e) => setVerifyTxId(e.target.value)}
+                  placeholder="请输入交易哈希（txId）"
+                  className="flex-1 px-4 py-2.5 bg-background-lighter border border-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary/50 text-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={verifying || !verifyTxId.trim()}
+                  className={cn(
+                    "px-6 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
+                    verifying || !verifyTxId.trim()
+                      ? "bg-background-lighter text-text-tertiary cursor-not-allowed"
+                      : "bg-success text-white hover:bg-success/90"
+                  )}
+                >
+                  {verifying ? '验证中...' : '验证充值'}
+                </button>
+              </div>
+              {verifyMsg && (
+                <div className={cn(
+                  "mt-3 p-3 rounded-lg text-sm",
+                  verifyMsg.type === 'success'
+                    ? "bg-success/10 text-success border border-success/20"
+                    : "bg-danger/10 text-danger border border-danger/20"
+                )}>
+                  {verifyMsg.text}
+                </div>
+              )}
+            </form>
           </div>
         </div>
       </div>
