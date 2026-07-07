@@ -4,7 +4,7 @@ import { AuthRequest, authMiddleware } from '../middleware/auth';
 
 const router = Router();
 
-const TOKENS: Record<string, { mint: string; decimals: number; priceMint: string }> = {
+const TOKENS: Record<string, { mint: string; decimals: number; priceMint: string; fixedPrice?: number }> = {
   SOL: {
     mint: 'So11111111111111111111111111111111111111112',
     decimals: 9,
@@ -14,11 +14,13 @@ const TOKENS: Record<string, { mint: string; decimals: number; priceMint: string
     mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     decimals: 6,
     priceMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+    fixedPrice: 1,
   },
   RS: {
     mint: 'GAswtBAGV5NybYWN7YX9aTuJNkps4uft4Qjb4N31bonk',
     decimals: 9,
     priceMint: 'GAswtBAGV5NybYWN7YX9aTuJNkps4uft4Qjb4N31bonk',
+    fixedPrice: 0.15,
   },
   BTC: {
     mint: '9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E',
@@ -31,6 +33,25 @@ const TOKENS: Record<string, { mint: string; decimals: number; priceMint: string
     priceMint: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs',
   },
 };
+
+const FIXED_PRICES: Record<string, number> = {};
+for (const [symbol, token] of Object.entries(TOKENS)) {
+  if (token.fixedPrice !== undefined) {
+    FIXED_PRICES[symbol] = token.fixedPrice;
+  }
+}
+
+async function getPriceInUSDT(asset: string): Promise<number | null> {
+  const token = TOKENS[asset];
+  if (!token) return null;
+  
+  if (token.fixedPrice !== undefined) {
+    return token.fixedPrice;
+  }
+
+  const jupiterPrice = await getJupiterPrice(token.mint, TOKENS.USDT.mint);
+  return jupiterPrice;
+}
 
 async function getJupiterPrice(inputMint: string, outputMint: string): Promise<number | null> {
   try {
@@ -112,21 +133,37 @@ router.post('/quote', authMiddleware, async (req: AuthRequest, res: Response) =>
       return;
     }
 
+    let outAmount = 0;
+    let price = 0;
+    let fee = 0;
+
     const quote = await getJupiterQuote(
       inputToken.mint,
       outputToken.mint,
       amount,
       slippage || 50
-    );
+    ).catch(() => null);
 
-    if (!quote) {
+    if (quote && quote.outAmount) {
+      const outDecimals = outputToken.decimals;
+      outAmount = Number(quote.outAmount) / Math.pow(10, outDecimals);
+      price = outAmount / amount;
+      fee = Number(quote.routePlan?.[0]?.swapInfo?.feeAmount || 0) / 1e9;
+    } else {
+      const inputPrice = await getPriceInUSDT(inputAsset);
+      const outputPrice = await getPriceInUSDT(outputAsset);
+      
+      if (inputPrice !== null && outputPrice !== null && outputPrice > 0) {
+        price = inputPrice / outputPrice;
+        outAmount = amount * price;
+        fee = amount * 0.001;
+      }
+    }
+
+    if (outAmount <= 0 || price <= 0) {
       res.status(500).json({ error: 'Failed to get quote' });
       return;
     }
-
-    const outDecimals = outputToken.decimals;
-    const outAmount = Number(quote.outAmount) / Math.pow(10, outDecimals);
-    const price = outAmount / amount;
 
     res.json({
       inputAsset,
@@ -135,7 +172,7 @@ router.post('/quote', authMiddleware, async (req: AuthRequest, res: Response) =>
       outputAmount: outAmount,
       price,
       slippage: (slippage || 50) / 100,
-      fee: Number(quote.routePlan?.[0]?.swapInfo?.feeAmount || 0) / 1e9,
+      fee,
     });
   } catch (error) {
     console.error('Quote error:', error);
@@ -182,16 +219,29 @@ router.post('/swap', authMiddleware, async (req: AuthRequest, res: Response) => 
       outputToken.mint,
       amount,
       slippage || 50
-    );
+    ).catch(() => null);
 
-    if (!quote || !quote.outAmount) {
+    let outAmount = 0;
+    let price = 0;
+
+    if (quote && quote.outAmount) {
+      const outDecimals = outputToken.decimals;
+      outAmount = Number(quote.outAmount) / Math.pow(10, outDecimals);
+      price = outAmount / amount;
+    } else {
+      const inputPrice = await getPriceInUSDT(inputAsset);
+      const outputPrice = await getPriceInUSDT(outputAsset);
+      
+      if (inputPrice !== null && outputPrice !== null && outputPrice > 0) {
+        price = inputPrice / outputPrice;
+        outAmount = amount * price;
+      }
+    }
+
+    if (outAmount <= 0 || price <= 0) {
       res.status(500).json({ error: 'Failed to get quote' });
       return;
     }
-
-    const outDecimals = outputToken.decimals;
-    const outAmount = Number(quote.outAmount) / Math.pow(10, outDecimals);
-    const price = outAmount / amount;
     const symbol = `${inputAsset}_${outputAsset}`;
 
     db.prepare('UPDATE balances SET free = free - ?, total = total - ?, updated_at = ? WHERE user_id = ? AND asset = ?')
