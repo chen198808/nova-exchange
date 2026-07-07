@@ -7,24 +7,30 @@ export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const { login } = useUserStore()
+  const [loading, setLoading] = useState(false)
+  const { login, fetchBalances, loadDepositAddress } = useUserStore()
   const navigate = useNavigate()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setLoading(true)
 
     if (!username || !password) {
       setError('请输入用户名和密码')
+      setLoading(false)
       return
     }
 
-    const success = login(username, password)
+    const success = await login(username, password)
     if (success) {
+      await fetchBalances()
+      await loadDepositAddress()
       navigate('/')
     } else {
-      setError('登录失败，请重试')
+      setError('登录失败，请检查用户名和密码')
     }
+    setLoading(false)
   }
 
   return (
@@ -58,7 +64,8 @@ export default function Login() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="请输入用户名"
-                  className="w-full pl-10 pr-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
+                  disabled={loading}
+                  className="w-full pl-10 pr-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all disabled:opacity-50"
                 />
               </div>
             </div>
@@ -74,7 +81,8 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="请输入密码"
-                  className="w-full pl-10 pr-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
+                  disabled={loading}
+                  className="w-full pl-10 pr-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all disabled:opacity-50"
                 />
               </div>
             </div>
@@ -91,9 +99,10 @@ export default function Login() {
 
             <button
               type="submit"
-              className="w-full py-3 bg-primary hover:bg-primary-hover text-white font-medium rounded-lg transition-colors btn-glow-primary"
+              disabled={loading}
+              className="w-full py-3 bg-primary hover:bg-primary-hover text-white font-medium rounded-lg transition-colors btn-glow-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              登录
+              {loading ? '登录中...' : '登录'}
             </button>
           </form>
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { User, AccountBalance, Order, Position, DepositRecord, WithdrawRecord, OrderSide, OrderType, SecuritySettings, LoginDevice, RiskAlert } from '@/types'
 import { mockUser, initialBalances, mockOrders, mockPositions, mockDepositRecords, mockWithdrawRecords, calculateLiquidationPrice, mockSecuritySettings, mockLoginDevices, mockRiskAlerts } from '@/data/mockData'
+import api from '@/services/api'
 
 interface UserState {
   user: User | null
@@ -13,9 +14,12 @@ interface UserState {
   securitySettings: SecuritySettings
   loginDevices: LoginDevice[]
   riskAlerts: RiskAlert[]
+  depositAddress: string
 
-  login: (username: string, password: string) => boolean
+  login: (username: string, password: string) => Promise<boolean>
+  register: (username: string, password: string, email?: string) => Promise<boolean>
   logout: () => void
+  fetchBalances: () => Promise<void>
   placeOrder: (params: {
     symbol: string
     side: OrderSide
@@ -25,7 +29,7 @@ interface UserState {
   }) => Order | null
   cancelOrder: (orderId: string) => boolean
   deposit: (asset: string, amount: number, address: string) => DepositRecord
-  withdraw: (asset: string, amount: number, address: string, fee: number) => WithdrawRecord | null
+  withdraw: (asset: string, amount: number, address: string) => Promise<boolean>
   getBalance: (asset: string) => AccountBalance | undefined
   openPosition: (params: {
     symbol: string
@@ -37,42 +41,238 @@ interface UserState {
   closePosition: (index: number) => boolean
   updatePositions: (markPrices: Record<string, number>) => void
   updateSecuritySetting: (key: keyof SecuritySettings, value: boolean) => void
+  loadDepositAddress: () => Promise<void>
+  fetchDepositRecords: () => Promise<void>
+  fetchWithdrawRecords: () => Promise<void>
+  verifyDeposit: (txId: string, asset: string) => Promise<boolean>
+  swap: (inputAsset: string, outputAsset: string, amount: number, slippage?: number) => Promise<boolean>
+  fetchOrders: () => Promise<void>
+  getQuote: (inputAsset: string, outputAsset: string, amount: number, slippage?: number) => Promise<any>
 }
 
 export const useUserStore = create<UserState>((set, get) => ({
-  user: mockUser,
-  isLoggedIn: true,
-  balances: initialBalances,
-  orders: mockOrders,
+  user: null,
+  isLoggedIn: false,
+  balances: [],
+  orders: [],
   positions: mockPositions,
-  depositRecords: mockDepositRecords,
-  withdrawRecords: mockWithdrawRecords,
+  depositRecords: [],
+  withdrawRecords: [],
   securitySettings: mockSecuritySettings,
   loginDevices: mockLoginDevices,
   riskAlerts: mockRiskAlerts,
+  depositAddress: '',
 
-  login: (username: string, _password: string) => {
-    const user: User = {
-      id: 'user_' + Date.now(),
-      username,
-      email: `${username}@example.com`,
-      avatar: '👤',
-      kycLevel: 1,
-      vipLevel: 1,
-      registeredAt: Date.now()
+  register: async (username: string, password: string, email?: string) => {
+    try {
+      const result: any = await api.auth.register(username, password, email)
+      if (result.success && result.token) {
+        localStorage.setItem('token', result.token)
+        const userData: User = {
+          id: String(result.user.id),
+          username: result.user.username,
+          email: result.user.email,
+          avatar: '👤',
+          kycLevel: 1,
+          vipLevel: 1,
+          registeredAt: Date.now()
+        }
+        set({
+          user: userData,
+          isLoggedIn: true,
+          depositAddress: result.user.depositAddress || ''
+        })
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('Register error:', error)
+      return false
     }
-    set({
-      user,
-      isLoggedIn: true
-    })
-    return true
+  },
+
+  login: async (username: string, password: string) => {
+    try {
+      const result: any = await api.auth.login(username, password)
+      if (result.success && result.token) {
+        localStorage.setItem('token', result.token)
+        const userData: User = {
+          id: String(result.user.id),
+          username: result.user.username,
+          email: result.user.email,
+          avatar: '👤',
+          kycLevel: 1,
+          vipLevel: 1,
+          registeredAt: Date.now()
+        }
+        set({
+          user: userData,
+          isLoggedIn: true,
+          depositAddress: result.user.depositAddress || ''
+        })
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('Login error:', error)
+      return false
+    }
   },
 
   logout: () => {
+    localStorage.removeItem('token')
     set({
       user: null,
-      isLoggedIn: false
+      isLoggedIn: false,
+      balances: [],
+      orders: [],
+      depositRecords: [],
+      withdrawRecords: [],
+      depositAddress: ''
     })
+  },
+
+  fetchBalances: async () => {
+    try {
+      const result: any = await api.assets.getBalances()
+      if (result.balances) {
+        set({ balances: result.balances as AccountBalance[] })
+      }
+    } catch (error) {
+      console.error('Fetch balances error:', error)
+    }
+  },
+
+  loadDepositAddress: async () => {
+    try {
+      const result: any = await api.assets.getDepositAddress()
+      if (result.address) {
+        set({ depositAddress: result.address })
+      }
+    } catch (error) {
+      console.error('Load deposit address error:', error)
+    }
+  },
+
+  verifyDeposit: async (txId: string, asset: string): Promise<boolean> => {
+    try {
+      const result: any = await api.assets.verifyDeposit(txId, asset)
+      if (result.success) {
+        await get().fetchBalances()
+        await get().fetchDepositRecords()
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('Verify deposit error:', error)
+      return false
+    }
+  },
+
+  fetchDepositRecords: async () => {
+    try {
+      const result: any = await api.assets.getDeposits()
+      if (result.deposits) {
+        const records: DepositRecord[] = result.deposits.map((d: any) => ({
+          id: String(d.id),
+          asset: d.asset,
+          amount: d.amount,
+          address: d.to_address,
+          txId: d.tx_id,
+          status: d.status,
+          confirmations: d.confirmations || 0,
+          timestamp: d.created_at
+        }))
+        set({ depositRecords: records })
+      }
+    } catch (error) {
+      console.error('Fetch deposit records error:', error)
+    }
+  },
+
+  fetchWithdrawRecords: async () => {
+    try {
+      const result: any = await api.assets.getWithdrawals()
+      if (result.withdrawals) {
+        const records: WithdrawRecord[] = result.withdrawals.map((w: any) => ({
+          id: String(w.id),
+          asset: w.asset,
+          amount: w.amount,
+          address: w.to_address,
+          fee: w.fee,
+          txId: w.tx_id,
+          status: w.status,
+          timestamp: w.created_at
+        }))
+        set({ withdrawRecords: records })
+      }
+    } catch (error) {
+      console.error('Fetch withdraw records error:', error)
+    }
+  },
+
+  withdraw: async (asset: string, amount: number, address: string): Promise<boolean> => {
+    try {
+      const result: any = await api.assets.withdraw(asset, amount, address)
+      if (result.success) {
+        await get().fetchBalances()
+        await get().fetchWithdrawRecords()
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('Withdraw error:', error)
+      return false
+    }
+  },
+
+  getQuote: async (inputAsset: string, outputAsset: string, amount: number, slippage?: number): Promise<any> => {
+    try {
+      const result: any = await api.trading.getQuote(inputAsset, outputAsset, amount, slippage)
+      return result
+    } catch (error) {
+      console.error('Get quote error:', error)
+      return null
+    }
+  },
+
+  swap: async (inputAsset: string, outputAsset: string, amount: number, slippage?: number): Promise<boolean> => {
+    try {
+      const result: any = await api.trading.swap(inputAsset, outputAsset, amount, slippage)
+      if (result.success) {
+        await get().fetchBalances()
+        await get().fetchOrders()
+        return true
+      }
+      return false
+    } catch (error: any) {
+      console.error('Swap error:', error)
+      alert(error.message || '兑换失败')
+      return false
+    }
+  },
+
+  fetchOrders: async () => {
+    try {
+      const result: any = await api.trading.getOrders()
+      if (result.orders) {
+        const orders: Order[] = result.orders.map((o: any) => ({
+          id: String(o.id),
+          symbol: o.symbol,
+          side: o.side as OrderSide,
+          type: o.type as OrderType,
+          price: o.price,
+          amount: o.amount,
+          filledAmount: o.filled_amount,
+          total: o.total,
+          status: o.status as any,
+          timestamp: o.created_at
+        }))
+        set({ orders })
+      }
+    } catch (error) {
+      console.error('Fetch orders error:', error)
+    }
   },
 
   placeOrder: ({ symbol, side, type, price, amount }) => {
@@ -290,54 +490,6 @@ export const useUserStore = create<UserState>((set, get) => ({
 
     set({
       depositRecords: [record, ...state.depositRecords]
-    })
-
-    return record
-  },
-
-  withdraw: (asset: string, amount: number, address: string, fee: number) => {
-    const state = get()
-    if (!state.isLoggedIn) return null
-
-    const balance = state.balances.find(b => b.asset === asset)
-    if (!balance || balance.free < amount + fee) return null
-
-    const updatedBalances = state.balances.map(b => {
-      if (b.asset === asset) {
-        return {
-          ...b,
-          free: b.free - amount - fee,
-          total: b.total - amount - fee
-        }
-      }
-      return b
-    })
-
-    const record: WithdrawRecord = {
-      id: 'withdraw_' + Date.now(),
-      asset,
-      amount,
-      address,
-      fee,
-      status: 'pending',
-      timestamp: Date.now()
-    }
-
-    setTimeout(() => {
-      set(s => {
-        const updatedRecords = s.withdrawRecords.map(r => {
-          if (r.id === record.id) {
-            return { ...r, status: 'completed' as const, txId: 'tx_' + Date.now() }
-          }
-          return r
-        })
-        return { withdrawRecords: updatedRecords }
-      })
-    }, 5000)
-
-    set({
-      balances: updatedBalances,
-      withdrawRecords: [record, ...state.withdrawRecords]
     })
 
     return record

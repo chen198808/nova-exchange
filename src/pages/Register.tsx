@@ -9,34 +9,42 @@ export default function Register() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
-  const { login } = useUserStore()
+  const [loading, setLoading] = useState(false)
+  const { register, fetchBalances, loadDepositAddress } = useUserStore()
   const navigate = useNavigate()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setLoading(true)
 
-    if (!username || !email || !password || !confirmPassword) {
+    if (!username || !password || !confirmPassword) {
       setError('请填写所有必填字段')
+      setLoading(false)
       return
     }
 
     if (password !== confirmPassword) {
       setError('两次输入的密码不一致')
+      setLoading(false)
       return
     }
 
     if (password.length < 6) {
       setError('密码长度至少为6位')
+      setLoading(false)
       return
     }
 
-    const success = login(username, password)
+    const success = await register(username, password, email)
     if (success) {
+      await fetchBalances()
+      await loadDepositAddress()
       navigate('/')
     } else {
-      setError('注册失败，请重试')
+      setError('注册失败，用户名可能已存在')
     }
+    setLoading(false)
   }
 
   return (
@@ -70,14 +78,15 @@ export default function Register() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="请输入用户名"
-                  className="w-full pl-10 pr-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
+                  disabled={loading}
+                  className="w-full pl-10 pr-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all disabled:opacity-50"
                 />
               </div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-2">
-                邮箱
+                邮箱 (选填)
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
@@ -86,7 +95,8 @@ export default function Register() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="请输入邮箱"
-                  className="w-full pl-10 pr-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
+                  disabled={loading}
+                  className="w-full pl-10 pr-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all disabled:opacity-50"
                 />
               </div>
             </div>
@@ -102,7 +112,8 @@ export default function Register() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="请输入密码"
-                  className="w-full pl-10 pr-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
+                  disabled={loading}
+                  className="w-full pl-10 pr-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all disabled:opacity-50"
                 />
               </div>
             </div>
@@ -118,7 +129,8 @@ export default function Register() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="请再次输入密码"
-                  className="w-full pl-10 pr-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
+                  disabled={loading}
+                  className="w-full pl-10 pr-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all disabled:opacity-50"
                 />
               </div>
             </div>
@@ -132,9 +144,10 @@ export default function Register() {
 
             <button
               type="submit"
-              className="w-full py-3 bg-primary hover:bg-primary-hover text-white font-medium rounded-lg transition-colors btn-glow-primary"
+              disabled={loading}
+              className="w-full py-3 bg-primary hover:bg-primary-hover text-white font-medium rounded-lg transition-colors btn-glow-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              注册
+              {loading ? '注册中...' : '注册'}
             </button>
           </form>
 

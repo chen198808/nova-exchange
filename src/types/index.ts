@@ -115,7 +115,7 @@ export interface Trade {
   timestamp: number
 }
 
-export type RecordStatus = 'pending' | 'completed' | 'failed'
+export type RecordStatus = 'pending' | 'completed' | 'failed' | 'confirmed'
 
 export interface DepositRecord {
   id: string

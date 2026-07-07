@@ -82,7 +82,7 @@ export default function SpotTrade() {
     refreshOrderBook
   } = useMarketStore()
 
-  const { balances, orders, placeOrder, cancelOrder, getBalance, isLoggedIn } = useUserStore()
+  const { balances, orders, placeOrder, cancelOrder, getBalance, isLoggedIn, swap, getQuote, fetchOrders } = useUserStore()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [favorites, setFavorites] = useState<string[]>(['BTC_USDT', 'ETH_USDT'])
@@ -94,6 +94,8 @@ export default function SpotTrade() {
   const [activeTab, setActiveTab] = useState<'open' | 'history'>('open')
   const [tradeRecords, setTradeRecords] = useState<TradeRecord[]>([])
   const [priceFlash, setPriceFlash] = useState<'up' | 'down' | null>(null)
+  const [isSwapping, setIsSwapping] = useState(false)
+  const [quoteInfo, setQuoteInfo] = useState<any>(null)
   const prevPriceRef = useRef<number>(currentPair.lastPrice)
 
   const filteredPairs = useMemo(() => {
@@ -181,6 +183,12 @@ export default function SpotTrade() {
   useEffect(() => {
     setTradeRecords(generateTradeRecords(currentPair, 30))
   }, [currentPair.symbol])
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchOrders()
+    }
+  }, [isLoggedIn, fetchOrders])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -337,13 +345,12 @@ export default function SpotTrade() {
     setAmount(calculatedAmount.toFixed(currentPair.amountPrecision))
   }
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     if (!isLoggedIn) {
       alert('请先登录')
       return
     }
 
-    const p = orderType === 'market' ? currentPair.lastPrice : priceNum
     const a = amountNum
 
     if (a <= 0) {
@@ -356,19 +363,41 @@ export default function SpotTrade() {
       return
     }
 
-    const result = placeOrder({
-      symbol: currentPair.symbol,
-      side: orderSide,
-      type: orderType,
-      price: p,
-      amount: a
-    })
+    const inputAsset = orderSide === 'buy' ? currentPair.quoteAsset : currentPair.baseAsset
+    const outputAsset = orderSide === 'buy' ? currentPair.baseAsset : currentPair.quoteAsset
+    const inputAmount = orderSide === 'buy' ? priceNum * a : a
 
-    if (result) {
-      setAmount('')
-      alert('下单成功')
+    if (orderType === 'market') {
+      setIsSwapping(true)
+      try {
+        const success = await swap(inputAsset, outputAsset, inputAmount, 50)
+        if (success) {
+          setAmount('')
+          setQuoteInfo(null)
+          alert('兑换成功')
+        } else {
+          alert('兑换失败，请检查余额或稍后重试')
+        }
+      } catch (error: any) {
+        alert('兑换失败: ' + (error.message || '未知错误'))
+      } finally {
+        setIsSwapping(false)
+      }
     } else {
-      alert('下单失败，请检查余额')
+      const result = placeOrder({
+        symbol: currentPair.symbol,
+        side: orderSide,
+        type: orderType,
+        price: priceNum,
+        amount: a
+      })
+
+      if (result) {
+        setAmount('')
+        alert('下单成功')
+      } else {
+        alert('下单失败，请检查余额')
+      }
     }
   }
 

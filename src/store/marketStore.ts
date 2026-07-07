@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Coin, TradingPair, FuturesPair, OrderBook, KlineData, Trade } from '@/types'
 import { coins as mockCoins, tradingPairs as mockPairs, futuresPairs as mockFuturesPairs, generateOrderBook, generateKlineData, generateRecentTrades } from '@/data/mockData'
+import { getMultipleTokenPrices } from '@/services/jupiterApi'
 
 interface MarketState {
   coins: Coin[]
@@ -12,10 +13,12 @@ interface MarketState {
   klineData: KlineData[]
   klineInterval: '1m' | '5m' | '15m' | '1h' | '4h' | '1d'
   recentTrades: Trade[]
+  priceSource: 'mock' | 'jupiter'
 
   setCurrentPair: (symbol: string) => void
   setCurrentFuturesPair: (symbol: string) => void
   updatePrices: () => void
+  fetchRealPrices: () => Promise<void>
   setKlineInterval: (interval: '1m' | '5m' | '15m' | '1h' | '4h' | '1d') => void
   refreshOrderBook: () => void
   refreshKlineData: () => void
@@ -38,6 +41,7 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   klineData: initialKlineData,
   klineInterval: '1d',
   recentTrades: initialRecentTrades,
+  priceSource: 'mock',
 
   setCurrentPair: (symbol: string) => {
     const pair = get().tradingPairs.find(p => p.symbol === symbol)
@@ -67,6 +71,80 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       klineData: newKlineData,
       recentTrades: newRecentTrades
     })
+  },
+
+  fetchRealPrices: async () => {
+    try {
+      const solanaCoins = get().coins.filter(c => c.chain === 'solana' && c.contractAddress)
+      if (solanaCoins.length === 0) return
+
+      const mintAddresses = solanaCoins.map(c => c.contractAddress!)
+      const prices = await getMultipleTokenPrices(mintAddresses)
+
+      if (Object.keys(prices).length === 0) return
+
+      set(state => {
+        const updatedCoins = state.coins.map(coin => {
+          if (coin.contractAddress && prices[coin.contractAddress]) {
+            const newPrice = prices[coin.contractAddress]
+            const oldPrice = coin.price
+            const change24h = ((newPrice - oldPrice) / oldPrice) * 100 + coin.change24h * 0.5
+            return {
+              ...coin,
+              price: newPrice,
+              change24h: Number(change24h.toFixed(2))
+            }
+          }
+          return coin
+        })
+
+        const updatedPairs = state.tradingPairs.map(pair => {
+          const baseCoin = updatedCoins.find(c => c.symbol === pair.baseAsset)
+          if (baseCoin && baseCoin.chain === 'solana') {
+            return {
+              ...pair,
+              lastPrice: baseCoin.price,
+              change24h: baseCoin.change24h,
+              high24h: Math.max(pair.high24h, baseCoin.price),
+              low24h: Math.min(pair.low24h, baseCoin.price)
+            }
+          }
+          return pair
+        })
+
+        const updatedFuturesPairs = state.futuresPairs.map(pair => {
+          const baseCoin = updatedCoins.find(c => c.symbol === pair.baseAsset)
+          if (baseCoin && baseCoin.chain === 'solana') {
+            return {
+              ...pair,
+              lastPrice: baseCoin.price,
+              markPrice: baseCoin.price * 1.0001,
+              change24h: baseCoin.change24h,
+              high24h: Math.max(pair.high24h, baseCoin.price),
+              low24h: Math.min(pair.low24h, baseCoin.price)
+            }
+          }
+          return pair
+        })
+
+        const currentPairSymbol = state.currentPair.symbol
+        const updatedCurrentPair = updatedPairs.find(p => p.symbol === currentPairSymbol) || state.currentPair
+
+        const currentFuturesPairSymbol = state.currentFuturesPair.symbol
+        const updatedCurrentFuturesPair = updatedFuturesPairs.find(p => p.symbol === currentFuturesPairSymbol) || state.currentFuturesPair
+
+        return {
+          coins: updatedCoins,
+          tradingPairs: updatedPairs,
+          futuresPairs: updatedFuturesPairs,
+          currentPair: updatedCurrentPair,
+          currentFuturesPair: updatedCurrentFuturesPair,
+          priceSource: 'jupiter'
+        }
+      })
+    } catch (error) {
+      console.error('Failed to fetch real prices:', error)
+    }
   },
 
   updatePrices: () => {

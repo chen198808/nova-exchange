@@ -10,34 +10,18 @@ import type { WithdrawRecord, RecordStatus } from '@/types'
 const withdrawChains: Record<string, { name: string; fee: number; minWithdraw: number }[]> = {
   USDT: [
     { name: 'Solana', fee: 1, minWithdraw: 20 },
-    { name: 'ERC20', fee: 5, minWithdraw: 50 },
   ],
   BTC: [
-    { name: 'Bitcoin', fee: 0.0005, minWithdraw: 0.002 },
+    { name: 'Solana (WBTC)', fee: 0.0005, minWithdraw: 0.002 },
   ],
   ETH: [
-    { name: 'ERC20', fee: 0.005, minWithdraw: 0.02 },
+    { name: 'Solana (WETH)', fee: 0.005, minWithdraw: 0.02 },
   ],
   SOL: [
-    { name: 'Solana', fee: 0.01, minWithdraw: 0.5 },
+    { name: 'Solana', fee: 0.001, minWithdraw: 0.1 },
   ],
   RS: [
-    { name: 'Solana', fee: 10, minWithdraw: 200 },
-  ],
-  BNB: [
-    { name: 'BEP20', fee: 0.01, minWithdraw: 0.1 },
-  ],
-  XRP: [
-    { name: 'XRP Ledger', fee: 0.2, minWithdraw: 20 },
-  ],
-  DOGE: [
-    { name: 'Dogecoin', fee: 2, minWithdraw: 100 },
-  ],
-  ADA: [
-    { name: 'Cardano', fee: 0.3, minWithdraw: 10 },
-  ],
-  AVAX: [
-    { name: 'Avalanche C-Chain', fee: 0.05, minWithdraw: 1 },
+    { name: 'Solana', fee: 10, minWithdraw: 100 },
   ],
 }
 
@@ -46,20 +30,28 @@ const defaultChain = { name: 'Solana', fee: 1, minWithdraw: 20 }
 export default function Withdraw() {
   const [searchParams] = useSearchParams()
   const { coins } = useMarketStore()
-  const { withdrawRecords, balances, withdraw } = useUserStore()
+  const { withdrawRecords, balances, withdraw, fetchBalances, fetchWithdrawRecords, isLoggedIn } = useUserStore()
   const [selectedAsset, setSelectedAsset] = useState('USDT')
   const [selectedChainIndex, setSelectedChainIndex] = useState(0)
   const [showAssetDropdown, setShowAssetDropdown] = useState(false)
   const [address, setAddress] = useState('')
   const [amount, setAmount] = useState('')
   const [showAddressBook, setShowAddressBook] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const availableAssets = Object.keys(withdrawChains)
 
   const addressBook = [
-    { label: '我的主钱包', address: '9rGfe8WuFhNbK7Yq2cV3pR4tS6wX8yZ1aD2eF3gH4iJ5', chain: 'Solana' },
-    { label: '交易所钱包', address: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', chain: 'ERC20' },
+    { label: '我的主钱包', address: '', chain: 'Solana' },
   ]
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchBalances()
+      fetchWithdrawRecords()
+    }
+  }, [isLoggedIn, fetchBalances, fetchWithdrawRecords])
 
   useEffect(() => {
     const asset = searchParams.get('asset')
@@ -86,13 +78,20 @@ export default function Withdraw() {
   const actualReceive = Math.max(0, amountNum - fee)
   const isAmountValid = amountNum >= currentChain.minWithdraw && amountNum + fee <= availableBalance && address.trim().length > 0
 
-  const handleWithdraw = () => {
-    if (!isAmountValid) return
-    const result = withdraw(selectedAsset, amountNum, address, fee)
-    if (result) {
+  const handleWithdraw = async () => {
+    if (!isAmountValid || loading) return
+    setLoading(true)
+    setMessage(null)
+
+    const success = await withdraw(selectedAsset, amountNum, address)
+    if (success) {
+      setMessage({ type: 'success', text: '提币申请已提交，正在处理...' })
       setAmount('')
       setAddress('')
+    } else {
+      setMessage({ type: 'error', text: '提币失败，请检查余额或地址是否正确' })
     }
+    setLoading(false)
   }
 
   const handleMax = () => {
@@ -111,6 +110,8 @@ export default function Withdraw() {
         return { text: '已完成', color: 'text-success', bg: 'bg-success/10', icon: CircleCheck }
       case 'pending':
         return { text: '处理中', color: 'text-warning', bg: 'bg-warning/10', icon: CircleDashed }
+      case 'confirmed':
+        return { text: '已确认', color: 'text-success', bg: 'bg-success/10', icon: CircleCheck }
       case 'failed':
         return { text: '失败', color: 'text-danger', bg: 'bg-danger/10', icon: XCircle }
       default:
@@ -126,6 +127,21 @@ export default function Withdraw() {
             <ArrowUpFromLine className="w-5 h-5 text-warning" />
             提现
           </h2>
+
+          {!isLoggedIn && (
+            <div className="p-4 bg-warning/10 border border-warning/30 rounded-lg text-warning text-center mb-6">
+              请先登录后再进行提币操作
+            </div>
+          )}
+
+          {message && (
+            <div className={cn(
+              "p-3 rounded-lg text-sm mb-4",
+              message.type === 'success' ? 'bg-success/10 border border-success/30 text-success' : 'bg-danger/10 border border-danger/30 text-danger'
+            )}>
+              {message.text}
+            </div>
+          )}
 
           <div className="mb-6">
             <label className="block text-sm font-medium text-text-secondary mb-2">选择币种</label>
@@ -217,7 +233,8 @@ export default function Withdraw() {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder={`请输入 ${currentChain.name} 网络地址`}
-                className="w-full px-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary transition-colors"
+                disabled={loading}
+                className="w-full px-4 py-3 bg-background-lighter border border-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary transition-colors disabled:opacity-50"
               />
               {showAddressBook && (
                 <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-background-card border border-border rounded-lg shadow-lg overflow-hidden">
@@ -231,7 +248,7 @@ export default function Withdraw() {
                         <span className="font-medium text-text-primary">{item.label}</span>
                         <span className="text-xs text-text-tertiary bg-background-lighter px-2 py-0.5 rounded">{item.chain}</span>
                       </div>
-                      <div className="text-sm text-text-secondary font-mono truncate">{item.address}</div>
+                      <div className="text-sm text-text-secondary font-mono truncate">{item.address || '暂无地址'}</div>
                     </button>
                   ))}
                 </div>
@@ -253,11 +270,13 @@ export default function Withdraw() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="请输入数量"
-                className="w-full px-4 py-3 pr-20 bg-background-lighter border border-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary transition-colors font-number"
+                disabled={loading}
+                className="w-full px-4 py-3 pr-20 bg-background-lighter border border-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary transition-colors font-number disabled:opacity-50"
               />
               <button
                 onClick={handleMax}
-                className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-md transition-colors"
+                disabled={loading}
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-md transition-colors disabled:opacity-50"
               >
                 全部
               </button>
@@ -303,15 +322,15 @@ export default function Withdraw() {
 
           <button
             onClick={handleWithdraw}
-            disabled={!isAmountValid}
+            disabled={!isAmountValid || loading || !isLoggedIn}
             className={cn(
               "w-full py-3.5 rounded-lg font-medium text-white transition-all",
-              isAmountValid
+              isAmountValid && isLoggedIn && !loading
                 ? "bg-danger hover:bg-danger-hover btn-glow-danger"
                 : "bg-text-muted cursor-not-allowed opacity-50"
             )}
           >
-            确认提现
+            {loading ? '处理中...' : '确认提现'}
           </button>
         </div>
 
@@ -345,7 +364,7 @@ export default function Withdraw() {
               </div>
             ) : (
               withdrawRecords.map((record: WithdrawRecord) => {
-                const statusInfo = getStatusInfo(record.status)
+                const statusInfo = getStatusInfo(record.status as any)
                 const StatusIcon = statusInfo.icon
                 return (
                   <div
@@ -373,7 +392,7 @@ export default function Withdraw() {
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span className="text-text-tertiary">手续费</span>
                       <span className="text-text-secondary font-number">
-                        {formatAmount(record.fee, 6)}
+                        {formatAmount(record.fee || 0, 6)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs">

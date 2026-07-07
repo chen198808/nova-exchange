@@ -9,7 +9,9 @@ export const coins: Coin[] = [
     change24h: 2.35,
     volume24h: 28500000000,
     marketCap: 1320000000000,
-    precision: 8
+    precision: 8,
+    contractAddress: '9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E',
+    chain: 'solana'
   },
   {
     symbol: 'ETH',
@@ -19,7 +21,9 @@ export const coins: Coin[] = [
     change24h: -1.25,
     volume24h: 12800000000,
     marketCap: 423000000000,
-    precision: 8
+    precision: 8,
+    contractAddress: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs',
+    chain: 'solana'
   },
   {
     symbol: 'SOL',
@@ -29,7 +33,9 @@ export const coins: Coin[] = [
     change24h: 5.67,
     volume24h: 3200000000,
     marketCap: 78000000000,
-    precision: 6
+    precision: 6,
+    contractAddress: 'So11111111111111111111111111111111111111112',
+    chain: 'solana'
   },
   {
     symbol: 'BNB',
@@ -145,13 +151,13 @@ export const coins: Coin[] = [
     symbol: 'RS',
     name: 'RuneStone',
     icon: '💎',
-    price: 0.15,
+    price: 0.05226,
     change24h: 0,
     contractAddress: 'GAswtBAGV5NybYWN7YX9aTuJNkps4uft4Qjb4N31bonk',
     chain: 'solana',
-    volume24h: 50000000,
-    marketCap: 150000000,
-    precision: 6
+    volume24h: 2261.09,
+    marketCap: 2261090,
+    precision: 8
   }
 ]
 
@@ -205,16 +211,31 @@ export const tradingPairs: TradingPair[] = [
     symbol: 'RS_USDT',
     baseAsset: 'RS',
     quoteAsset: 'USDT',
-    lastPrice: 0.15,
+    lastPrice: 0.05226,
     change24h: 0,
-    high24h: 0.155,
-    low24h: 0.145,
-    volume24h: 333000000,
-    quoteVolume24h: 50000000,
-    pricePrecision: 4,
+    high24h: 0.055,
+    low24h: 0.048,
+    volume24h: 43260,
+    quoteVolume24h: 2261.09,
+    pricePrecision: 8,
     amountPrecision: 2,
     minAmount: 1,
     minTotal: 10
+  },
+  {
+    symbol: 'RS_SOL',
+    baseAsset: 'RS',
+    quoteAsset: 'SOL',
+    lastPrice: 0.00031,
+    change24h: 0,
+    high24h: 0.00033,
+    low24h: 0.00029,
+    volume24h: 25600,
+    quoteVolume24h: 7.936,
+    pricePrecision: 8,
+    amountPrecision: 2,
+    minAmount: 1,
+    minTotal: 0.1
   },
   {
     symbol: 'BNB_USDT',
