@@ -1,5 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { verifyToken } from '../_db';
+import { handleOptions, successResponse, errorResponse } from '../_utils';
 
 const TOKENS: Record<string, { mint: string; decimals: number }> = {
   SOL: { mint: 'So11111111111111111111111111111111111111112', decimals: 9 },
@@ -10,8 +11,10 @@ const TOKENS: Record<string, { mint: string; decimals: number }> = {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleOptions(req, res)) return;
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return errorResponse(res, 405, 'Method not allowed');
   }
 
   try {
@@ -19,68 +22,87 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const token = authHeader?.replace('Bearer ', '');
 
     if (!token) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return errorResponse(res, 401, '请先登录');
     }
 
     const userId = verifyToken(token);
     if (!userId) {
-      return res.status(401).json({ error: 'Invalid token' });
+      return errorResponse(res, 401, '登录已过期');
     }
 
     const { inputAsset, outputAsset, amount, slippage } = req.body;
 
     if (!inputAsset || !outputAsset || !amount) {
-      return res.status(400).json({ error: 'inputAsset, outputAsset, and amount are required' });
+      return errorResponse(res, 400, '输入币种、输出币种和金额必填');
     }
 
     const inputToken = TOKENS[inputAsset];
     const outputToken = TOKENS[outputAsset];
 
     if (!inputToken || !outputToken) {
-      return res.status(400).json({ error: 'Unsupported asset' });
+      return errorResponse(res, 400, '不支持的币种');
     }
 
-    const inputDecimals = inputToken.decimals;
-    const amountRaw = Math.floor(amount * Math.pow(10, inputDecimals));
+    const quote = await getJupiterQuote(inputToken.mint, outputToken.mint, amount, slippage || 50);
 
-    const url = `https://quote-api.jup.ag/v6/quote?inputMint=${inputToken.mint}&outputMint=${outputToken.mint}&amount=${amountRaw}&slippageBps=${slippage || 50}`;
-    const response = await fetch(url);
-    const quote: any = await response.json();
-
-    if (!quote || !quote.outAmount) {
-      const basePrice = await getUSDTPrice(inputToken.mint);
-      const quotePrice = await getUSDTPrice(outputToken.mint);
-      if (basePrice && quotePrice) {
-        const price = basePrice / quotePrice;
-        const outAmount = amount * price;
-        return res.json({
-          inputAsset,
-          outputAsset,
-          inputAmount: amount,
-          outputAmount: outAmount,
-          price,
-          slippage: (slippage || 50) / 100,
-          fee: 0.001,
-        });
-      }
-      return res.status(500).json({ error: 'Failed to get quote' });
+    if (!quote) {
+      return errorResponse(res, 500, '获取报价失败');
     }
 
-    const outDecimals = outputToken.decimals;
-    const outAmount = Number(quote.outAmount) / Math.pow(10, outDecimals);
-    const price = outAmount / amount;
-
-    return res.json({
+    return successResponse(res, {
       inputAsset,
       outputAsset,
       inputAmount: amount,
-      outputAmount: outAmount,
-      price,
-      slippage: (slippage || 50) / 100,
-      fee: Number(quote.routePlan?.[0]?.swapInfo?.feeAmount || 0) / 1e9,
+      outputAmount: quote.outAmount,
+      price: quote.price,
+      slippage: quote.slippage,
+      fee: quote.fee,
     });
   } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+    return errorResponse(res, 500, error.message || '服务器错误');
+  }
+}
+
+async function getJupiterQuote(
+  inputMint: string,
+  outputMint: string,
+  amount: number,
+  slippageBps: number
+): Promise<{ outAmount: number; price: number; slippage: number; fee: number } | null> {
+  try {
+    const inputDecimals = 9;
+    const amountRaw = Math.floor(amount * Math.pow(10, inputDecimals));
+
+    const url = `https://quote-api.jup.ag/v6/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amountRaw}&slippageBps=${slippageBps}`;
+    const response = await fetch(url);
+    const quote: any = await response.json();
+
+    if (quote && quote.outAmount) {
+      const outputDecimals = 6;
+      const outAmount = Number(quote.outAmount) / Math.pow(10, outputDecimals);
+      return {
+        outAmount,
+        price: outAmount / amount,
+        slippage: slippageBps / 100,
+        fee: Number(quote.routePlan?.[0]?.swapInfo?.feeAmount || 0) / 1e9,
+      };
+    }
+
+    const basePrice = await getUSDTPrice(inputMint);
+    const quotePrice = await getUSDTPrice(outputMint);
+    if (basePrice && quotePrice) {
+      const price = basePrice / quotePrice;
+      return {
+        outAmount: amount * price,
+        price,
+        slippage: slippageBps / 100,
+        fee: 0.001,
+      };
+    }
+
+    return null;
+  } catch {
+    return null;
   }
 }
 

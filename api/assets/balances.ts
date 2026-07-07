@@ -1,9 +1,12 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { verifyToken, getBalances } from '../_db';
+import { handleOptions, successResponse, errorResponse } from '../_utils';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleOptions(req, res)) return;
+
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return errorResponse(res, 405, 'Method not allowed');
   }
 
   try {
@@ -11,17 +14,17 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const token = authHeader?.replace('Bearer ', '');
 
     if (!token) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return errorResponse(res, 401, '请先登录');
     }
 
     const userId = verifyToken(token);
     if (!userId) {
-      return res.status(401).json({ error: 'Invalid token' });
+      return errorResponse(res, 401, '登录已过期，请重新登录');
     }
 
     const balances = getBalances(userId);
-    return res.json({ balances });
+    return successResponse(res, { balances });
   } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+    return errorResponse(res, 500, error.message || '服务器错误');
   }
 }

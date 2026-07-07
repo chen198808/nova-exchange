@@ -1,9 +1,12 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { verifyToken, withdraw } from '../_db';
+import { handleOptions, successResponse, errorResponse } from '../_utils';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleOptions(req, res)) return;
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return errorResponse(res, 405, 'Method not allowed');
   }
 
   try {
@@ -11,21 +14,21 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const token = authHeader?.replace('Bearer ', '');
 
     if (!token) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return errorResponse(res, 401, '请先登录');
     }
 
     const userId = verifyToken(token);
     if (!userId) {
-      return res.status(401).json({ error: 'Invalid token' });
+      return errorResponse(res, 401, '登录已过期');
     }
 
     const { asset, amount, toAddress } = req.body;
     if (!asset || !amount || !toAddress) {
-      return res.status(400).json({ error: 'asset, amount, and toAddress are required' });
+      return errorResponse(res, 400, '币种、金额和地址必填');
     }
 
     const withdrawal = withdraw(userId, asset, amount, toAddress);
-    return res.json({
+    return successResponse(res, {
       success: true,
       withdrawalId: withdrawal.id,
       amount: withdrawal.amount,
@@ -35,6 +38,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       status: withdrawal.status,
     });
   } catch (error: any) {
-    return res.status(400).json({ error: error.message });
+    return errorResponse(res, 400, error.message || '提现失败');
   }
 }

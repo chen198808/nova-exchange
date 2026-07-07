@@ -36,13 +36,17 @@ export default function Register() {
       return
     }
 
-    const success = await register(username, password, email)
-    if (success) {
-      await fetchBalances()
-      await loadDepositAddress()
-      navigate('/')
-    } else {
-      setError('注册失败，用户名可能已存在')
+    try {
+      const success = await register(username, password, email)
+      if (success) {
+        await fetchBalances()
+        await loadDepositAddress()
+        navigate('/')
+      } else {
+        setError('注册失败，请稍后重试')
+      }
+    } catch (err: any) {
+      setError(err.message || '注册失败，请检查网络或用户名是否已存在')
     }
     setLoading(false)
   }

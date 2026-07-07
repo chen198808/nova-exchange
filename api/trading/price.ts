@@ -1,4 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import { handleOptions, successResponse, errorResponse } from '../_utils';
 
 const TOKENS: Record<string, { mint: string; decimals: number }> = {
   SOL: { mint: 'So11111111111111111111111111111111111111112', decimals: 9 },
@@ -9,16 +10,18 @@ const TOKENS: Record<string, { mint: string; decimals: number }> = {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleOptions(req, res)) return;
+
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return errorResponse(res, 405, 'Method not allowed');
   }
 
   try {
     const { pair } = req.query;
     const pairStr = Array.isArray(pair) ? pair[0] : pair;
-    
+
     if (!pairStr) {
-      return res.status(400).json({ error: 'Pair is required' });
+      return errorResponse(res, 400, '交易对必填');
     }
 
     const [baseAsset, quoteAsset] = pairStr.split('_');
@@ -26,33 +29,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const quoteToken = TOKENS[quoteAsset];
 
     if (!baseToken || !quoteToken) {
-      return res.status(400).json({ error: 'Unsupported pair' });
+      return errorResponse(res, 400, '不支持的币种');
     }
 
-    const url = `https://price.jup.ag/v6/price?ids=${baseToken.mint}&vsToken=${quoteToken.mint}`;
+    const price = await getJupiterPrice(baseToken.mint, quoteToken.mint);
+
+    if (price === null) {
+      return errorResponse(res, 500, '获取价格失败');
+    }
+
+    return successResponse(res, { pair: pairStr, price });
+  } catch (error: any) {
+    return errorResponse(res, 500, error.message || '服务器错误');
+  }
+}
+
+async function getJupiterPrice(inputMint: string, outputMint: string): Promise<number | null> {
+  try {
+    const url = `https://price.jup.ag/v6/price?ids=${inputMint}&vsToken=${outputMint}`;
     const response = await fetch(url);
     const data: any = await response.json();
-
-    let price = null;
-    if (data.data && data.data[baseToken.mint]) {
-      price = data.data[baseToken.mint].price;
+    if (data.data && data.data[inputMint]) {
+      return data.data[inputMint].price;
     }
 
-    if (price === null) {
-      const basePrice = await getUSDTPrice(baseToken.mint);
-      const quotePrice = await getUSDTPrice(quoteToken.mint);
-      if (basePrice && quotePrice) {
-        price = basePrice / quotePrice;
-      }
+    const basePrice = await getUSDTPrice(inputMint);
+    const quotePrice = await getUSDTPrice(outputMint);
+    if (basePrice && quotePrice) {
+      return basePrice / quotePrice;
     }
-
-    if (price === null) {
-      return res.status(500).json({ error: 'Failed to get price' });
-    }
-
-    return res.json({ pair: pairStr, price });
-  } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+    return null;
+  } catch {
+    return null;
   }
 }
 

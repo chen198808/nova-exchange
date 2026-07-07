@@ -22,13 +22,17 @@ export default function Login() {
       return
     }
 
-    const success = await login(username, password)
-    if (success) {
-      await fetchBalances()
-      await loadDepositAddress()
-      navigate('/')
-    } else {
-      setError('登录失败，请检查用户名和密码')
+    try {
+      const success = await login(username, password)
+      if (success) {
+        await fetchBalances()
+        await loadDepositAddress()
+        navigate('/')
+      } else {
+        setError('登录失败，请稍后重试')
+      }
+    } catch (err: any) {
+      setError(err.message || '登录失败，请检查用户名和密码')
     }
     setLoading(false)
   }

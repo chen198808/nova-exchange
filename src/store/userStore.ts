@@ -85,9 +85,9 @@ export const useUserStore = create<UserState>((set, get) => ({
         return true
       }
       return false
-    } catch (error) {
+    } catch (error: any) {
       console.error('Register error:', error)
-      return false
+      throw error
     }
   },
 
@@ -113,9 +113,9 @@ export const useUserStore = create<UserState>((set, get) => ({
         return true
       }
       return false
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error)
-      return false
+      throw error
     }
   },
 

@@ -1,9 +1,12 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { verifyToken, verifyDeposit } from '../_db';
+import { handleOptions, successResponse, errorResponse } from '../_utils';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleOptions(req, res)) return;
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return errorResponse(res, 405, 'Method not allowed');
   }
 
   try {
@@ -11,21 +14,21 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const token = authHeader?.replace('Bearer ', '');
 
     if (!token) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return errorResponse(res, 401, '请先登录');
     }
 
     const userId = verifyToken(token);
     if (!userId) {
-      return res.status(401).json({ error: 'Invalid token' });
+      return errorResponse(res, 401, '登录已过期');
     }
 
     const { txId, asset } = req.body;
     if (!txId || !asset) {
-      return res.status(400).json({ error: 'txId and asset are required' });
+      return errorResponse(res, 400, '交易哈希和币种必填');
     }
 
     const deposit = verifyDeposit(userId, txId, asset);
-    return res.json({
+    return successResponse(res, {
       success: true,
       depositId: deposit.id,
       amount: deposit.amount,
@@ -33,6 +36,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       status: deposit.status,
     });
   } catch (error: any) {
-    return res.status(400).json({ error: error.message });
+    return errorResponse(res, 400, error.message || '充值验证失败');
   }
 }
