@@ -18,15 +18,36 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (fetchError: any) {
+    throw new Error(`网络连接失败：${fetchError.message || '请检查网络连接'}`);
+  }
 
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  
+  let data: any;
+  if (contentType.includes('application/json')) {
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`服务器返回了无效的响应（HTTP ${response.status}）：${text.slice(0, 200) || '空响应'}`);
+    }
+  } else {
+    const text = await response.text().catch(() => '');
+    if (!response.ok) {
+      throw new Error(`请求失败（HTTP ${response.status}）：${text.slice(0, 200) || '服务器错误'}`);
+    }
+    throw new Error(`服务器返回了非 JSON 响应：${text.slice(0, 100) || '空响应'}`);
+  }
 
   if (!response.ok) {
-    const error: any = new Error(data.error || 'Request failed');
+    const error: any = new Error(data.error || `请求失败（HTTP ${response.status}）`);
     if (data.debug) error.debug = data.debug;
     if (data.hotWalletAddress) error.hotWalletAddress = data.hotWalletAddress;
     throw error;

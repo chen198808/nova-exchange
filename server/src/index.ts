@@ -45,6 +45,10 @@ app.use('/api/assets', assetRoutes);
 app.use('/api/trading', tradingRoutes);
 app.use('/api/okx', okxRoutes);
 
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ error: 'API endpoint not found' });
+});
+
 // Serve static files from dist directory
 const distPathDev = path.resolve(path.join(__dirname, '..', '..', 'dist'));
 const distPathProd = path.resolve(path.join(__dirname, '..', 'dist'));
