@@ -3,6 +3,18 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
+    { "source": "/api/auth/register", "destination": "/api/auth/register" },
+    { "source": "/api/auth/login", "destination": "/api/auth/login" },
+    { "source": "/api/assets/balances", "destination": "/api/assets/balances" },
+    { "source": "/api/assets/deposit-address", "destination": "/api/assets/deposit-address" },
+    { "source": "/api/assets/deposit/verify", "destination": "/api/assets/deposit-verify" },
+    { "source": "/api/assets/withdraw", "destination": "/api/assets/withdraw" },
+    { "source": "/api/assets/deposits", "destination": "/api/assets/deposits" },
+    { "source": "/api/assets/withdrawals", "destination": "/api/assets/withdrawals" },
+    { "source": "/api/trading/price/:pair", "destination": "/api/trading/price" },
+    { "source": "/api/trading/quote", "destination": "/api/trading/quote" },
+    { "source": "/api/trading/swap", "destination": "/api/trading/swap" },
+    { "source": "/api/trading/orders", "destination": "/api/trading/orders" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

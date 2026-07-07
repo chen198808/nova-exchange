@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Search, Menu, X, User, LogOut, Settings, Wallet, Shield, ChevronDown, TrendingUp } from 'lucide-react'
+import { Search, Menu, X, User, LogOut, Settings, Wallet, Shield, ChevronDown, TrendingUp, ArrowLeftRight } from 'lucide-react'
 import { useUserStore } from '@/store/userStore'
 import { cn } from '@/lib/utils'
 
 const navLinks = [
   { name: '首页', path: '/' },
+  { name: '闪兑', path: '/swap' },
   { name: '现货', path: '/trade/BTC_USDT' },
   { name: '合约', path: '/futures/BTC_USDT' },
   { name: '行情', path: '/markets' },

@@ -11,6 +11,7 @@ import History from "@/pages/History";
 import RiskCenter from "@/pages/RiskCenter";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import Swap from "@/pages/Swap";
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/trade/:pair" element={<SpotTrade />} />
           <Route path="/futures/:pair" element={<FuturesTrade />} />
           <Route path="/markets" element={<Markets />} />
+          <Route path="/swap" element={<Swap />} />
           <Route path="/risk" element={<RiskCenter />} />
 
           <Route path="/assets" element={<AssetsOverview />}>
