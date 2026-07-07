@@ -10,6 +10,7 @@ const navLinks = [
   { name: '现货', path: '/trade/BTC_USDT' },
   { name: '合约', path: '/futures/BTC_USDT' },
   { name: '行情', path: '/markets' },
+  { name: 'OKX行情', path: '/okx' },
   { name: '资产管理', path: '/assets' },
   { name: '风控中心', path: '/risk' },
 ]

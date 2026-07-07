@@ -95,6 +95,60 @@ export const api = {
     getOrders: () =>
       request('/trading/orders'),
   },
+
+  okx: {
+    getInstruments: (instType: string = 'SPOT') =>
+      request(`/okx/instruments?instType=${instType}`),
+
+    getTickers: (instType: string = 'SPOT') =>
+      request(`/okx/tickers?instType=${instType}`),
+
+    getTicker: (instId: string) =>
+      request(`/okx/ticker/${instId}`),
+
+    getCandles: (instId: string, bar: string = '1H', limit: number = 100) =>
+      request(`/okx/candles/${instId}?bar=${bar}&limit=${limit}`),
+
+    getOrderBook: (instId: string, sz: string = '20') =>
+      request(`/okx/orderbook/${instId}?sz=${sz}`),
+
+    getTrades: (instId: string, limit: number = 50) =>
+      request(`/okx/trades/${instId}?limit=${limit}`),
+
+    getBalance: () =>
+      request('/okx/balance'),
+
+    placeOrder: (params: {
+      instId: string;
+      tdMode: string;
+      side: string;
+      ordType: string;
+      sz: string;
+      px?: string;
+    }) =>
+      request('/okx/order', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      }),
+
+    cancelOrder: (instId: string, ordId: string) =>
+      request('/okx/cancel-order', {
+        method: 'POST',
+        body: JSON.stringify({ instId, ordId }),
+      }),
+
+    getOrder: (instId: string, ordId: string) =>
+      request(`/okx/order/${instId}/${ordId}`),
+
+    getOrdersHistory: (instType: string = 'SPOT', limit: number = 100) =>
+      request(`/okx/orders-history?instType=${instType}&limit=${limit}`),
+
+    getPositions: (instType: string = 'SWAP') =>
+      request(`/okx/positions?instType=${instType}`),
+
+    getStatus: () =>
+      request('/okx/status'),
+  },
 };
 
 export default api;

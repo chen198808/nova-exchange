@@ -10,6 +10,7 @@ import './database';
 import authRoutes from './routes/auth';
 import assetRoutes from './routes/assets';
 import tradingRoutes from './routes/trading';
+import okxRoutes from './routes/okx';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -34,6 +35,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/trading', tradingRoutes);
+app.use('/api/okx', okxRoutes);
 
 // Serve static files from dist directory
 const distPathDev = path.resolve(path.join(__dirname, '..', '..', 'dist'));

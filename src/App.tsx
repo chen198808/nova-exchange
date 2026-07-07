@@ -12,6 +12,7 @@ import RiskCenter from "@/pages/RiskCenter";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Swap from "@/pages/Swap";
+import OKXMarkets from "@/pages/OKXMarkets";
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/trade/:pair" element={<SpotTrade />} />
           <Route path="/futures/:pair" element={<FuturesTrade />} />
           <Route path="/markets" element={<Markets />} />
+          <Route path="/okx" element={<OKXMarkets />} />
           <Route path="/swap" element={<Swap />} />
           <Route path="/risk" element={<RiskCenter />} />
 
