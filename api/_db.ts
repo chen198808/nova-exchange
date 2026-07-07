@@ -1,11 +1,13 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import bs58 from 'bs58';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'novaexchange_jwt_secret_key_change_in_production';
 const DATA_FILE = path.join('/tmp', 'exchange-data.json');
+const HOT_WALLET_PRIVATE_KEY = process.env.HOT_WALLET_PRIVATE_KEY || '';
 
 interface User {
   id: number;
@@ -120,11 +122,30 @@ loadData();
 const DEFAULT_ASSETS = ['USDT', 'RS', 'SOL', 'BTC', 'ETH'];
 
 function generateWallet() {
+  const publicKeyBytes = crypto.randomBytes(32);
+  const privateKeyBytes = crypto.randomBytes(64);
+  
   const keypair = {
-    publicKey: bs58.encode(Buffer.from(crypto.getRandomValues(new Uint8Array(32)))),
-    privateKey: bs58.encode(Buffer.from(crypto.getRandomValues(new Uint8Array(64)))),
+    publicKey: bs58.encode(publicKeyBytes),
+    privateKey: bs58.encode(privateKeyBytes),
   };
   return keypair;
+}
+
+export function getHotWalletInfo() {
+  if (!HOT_WALLET_PRIVATE_KEY) {
+    return null;
+  }
+  try {
+    const secretKey = bs58.decode(HOT_WALLET_PRIVATE_KEY);
+    const publicKey = bs58.encode(secretKey.slice(0, 32));
+    return {
+      publicKey,
+      privateKey: HOT_WALLET_PRIVATE_KEY,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function registerUser(username: string, password: string, email?: string) {
