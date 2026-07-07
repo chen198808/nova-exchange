@@ -81,6 +81,30 @@ router.get('/deposit-address', authMiddleware, (req: AuthRequest, res: Response)
   }
 });
 
+router.get('/hotwallet/info', async (req: AuthRequest, res: Response) => {
+  try {
+    const hotWallet = getHotWallet();
+    if (!hotWallet) {
+      res.status(500).json({ error: 'Hot wallet not configured' });
+      return;
+    }
+
+    const tokenList: Record<string, { mint: string; decimals: number; ata?: string }> = {};
+    for (const [symbol, token] of Object.entries(TOKENS)) {
+      tokenList[symbol] = { ...token };
+    }
+
+    res.json({
+      address: hotWallet.publicKey,
+      chain: 'solana',
+      tokens: tokenList,
+    });
+  } catch (error) {
+    console.error('Hot wallet info error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.post('/deposit/verify', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { txId, asset } = req.body;
@@ -102,14 +126,17 @@ router.post('/deposit/verify', authMiddleware, async (req: AuthRequest, res: Res
       return;
     }
 
+    console.log(`[Deposit Verify] txId: ${txId}, asset: ${asset}, hotWallet: ${hotWallet.publicKey}`);
+
     const existingDeposit = db.prepare('SELECT id FROM deposits WHERE tx_id = ?').get(txId);
     if (existingDeposit) {
-      res.status(400).json({ error: 'Transaction already processed' });
+      res.status(400).json({ error: '该交易已被处理过' });
       return;
     }
 
     let amount = 0;
     let fromAddress = '';
+    let debugInfo: any = {};
 
     try {
       const conn = getConnection();
@@ -118,21 +145,51 @@ router.post('/deposit/verify', authMiddleware, async (req: AuthRequest, res: Res
         commitment: 'confirmed',
       });
 
-      if (tx && tx.meta && tx.meta.postTokenBalances && tx.meta.preTokenBalances) {
+      if (!tx) {
+        debugInfo.rpcError = 'Transaction not found on RPC node';
+        console.warn('[Deposit Verify] Transaction not found via RPC');
+      } else if (!tx.meta) {
+        debugInfo.rpcError = 'Transaction meta not found';
+        console.warn('[Deposit Verify] Transaction meta not found');
+      } else {
+        debugInfo.txFound = true;
+        debugInfo.postTokenBalancesCount = tx.meta.postTokenBalances?.length || 0;
+        debugInfo.preTokenBalancesCount = tx.meta.preTokenBalances?.length || 0;
+
         const hotWalletPubkey = hotWallet.publicKey;
 
-        for (const postBal of tx.meta.postTokenBalances) {
-          if (postBal.mint === token.mint && postBal.owner === hotWalletPubkey) {
-            const preBal = tx.meta.preTokenBalances.find(
-              (b: any) => b.mint === token.mint && b.owner === hotWalletPubkey
-            );
-            const preAmount = preBal ? Number(preBal.uiTokenAmount.amount) : 0;
-            const postAmount = Number(postBal.uiTokenAmount.amount);
-            const diff = postAmount - preAmount;
-            if (diff > 0) {
-              amount = diff / Math.pow(10, postBal.uiTokenAmount.decimals || token.decimals);
+        if (tx.meta.postTokenBalances && tx.meta.preTokenBalances) {
+          for (const postBal of tx.meta.postTokenBalances) {
+            console.log(`[Deposit Verify] postBal: mint=${postBal.mint}, owner=${postBal.owner}, amount=${postBal.uiTokenAmount.uiAmount}`);
+            
+            if (postBal.mint === token.mint && postBal.owner === hotWalletPubkey) {
+              const preBal = tx.meta.preTokenBalances.find(
+                (b: any) => b.mint === token.mint && b.owner === hotWalletPubkey
+              );
+              const preAmount = preBal ? Number(preBal.uiTokenAmount.amount) : 0;
+              const postAmount = Number(postBal.uiTokenAmount.amount);
+              const diff = postAmount - preAmount;
+              if (diff > 0) {
+                amount = diff / Math.pow(10, postBal.uiTokenAmount.decimals || token.decimals);
+                console.log(`[Deposit Verify] Found deposit: ${amount} ${asset}`);
+              }
             }
           }
+        }
+
+        if (amount <= 0 && tx.meta.postTokenBalances) {
+          const relevantBalances = tx.meta.postTokenBalances.filter(
+            (b: any) => b.mint === token.mint
+          );
+          debugInfo.relevantTokenBalances = relevantBalances.map((b: any) => ({
+            owner: b.owner,
+            amount: b.uiTokenAmount.uiAmount,
+          }));
+          
+          const hotWalletInvolved = tx.meta.postTokenBalances.some(
+            (b: any) => b.owner === hotWalletPubkey
+          );
+          debugInfo.hotWalletInvolved = hotWalletInvolved;
         }
 
         if (amount > 0 && tx.transaction && tx.transaction.message) {
@@ -142,25 +199,53 @@ router.post('/deposit/verify', authMiddleware, async (req: AuthRequest, res: Res
           }
         }
       }
-    } catch (rpcError) {
-      console.warn('RPC verification failed, trying solana.fm...', rpcError);
+    } catch (rpcError: any) {
+      console.warn('RPC verification failed:', rpcError.message);
+      debugInfo.rpcError = rpcError.message;
       
-      const tx: any = await fetch(`https://api.solana.fm/v0/transfers/${txId}`)
-        .then(r => r.json())
-        .catch(() => null);
+      try {
+        const tx: any = await fetch(`https://api.solana.fm/v0/transfers/${txId}`)
+          .then(r => r.json())
+          .catch(() => null);
 
-      if (tx && tx.status === 'success' && tx.data) {
-        for (const transfer of tx.data) {
-          if (transfer.to === hotWallet.publicKey && transfer.token_mint === token.mint) {
-            amount += Number(transfer.amount) / Math.pow(10, token.decimals);
-            fromAddress = transfer.from;
+        if (tx && tx.status === 'success' && tx.data) {
+          debugInfo.solanaFmSuccess = true;
+          debugInfo.solanaFmTransfers = tx.data.length;
+          
+          for (const transfer of tx.data) {
+            console.log(`[Deposit Verify] solana.fm transfer: from=${transfer.from}, to=${transfer.to}, mint=${transfer.token_mint}, amount=${transfer.amount}`);
+            
+            if (transfer.to === hotWallet.publicKey && transfer.token_mint === token.mint) {
+              amount += Number(transfer.amount) / Math.pow(10, token.decimals);
+              fromAddress = transfer.from;
+            }
           }
+        } else {
+          debugInfo.solanaFmError = 'Failed to fetch from solana.fm';
         }
+      } catch (fmError) {
+        console.warn('solana.fm verification failed:', fmError);
+        debugInfo.solanaFmError = String(fmError);
       }
     }
 
     if (amount <= 0) {
-      res.status(400).json({ error: '未找到有效的充值转账，请检查交易哈希和充值地址是否正确' });
+      let errorMsg = '未找到有效的充值转账。';
+      errorMsg += `\n\n请检查：`;
+      errorMsg += `\n1. 交易哈希是否正确`;
+      errorMsg += `\n2. 充值地址是否为：${hotWallet.publicKey}`;
+      errorMsg += `\n3. 转账的代币是否为 ${asset} (${token.mint})`;
+      errorMsg += `\n4. 交易是否已在链上确认（请等待约30秒后重试）`;
+      
+      if (debugInfo.hotWalletInvolved === false) {
+        errorMsg += `\n\n⚠️ 提示：该交易未涉及当前热钱包地址，请确认您转账的地址是否正确。`;
+      }
+      
+      res.status(400).json({ 
+        error: errorMsg,
+        debug: debugInfo,
+        hotWalletAddress: hotWallet.publicKey,
+      });
       return;
     }
 
@@ -177,6 +262,8 @@ router.post('/deposit/verify', authMiddleware, async (req: AuthRequest, res: Res
       'UPDATE balances SET free = free + ?, total = total + ?, updated_at = ? WHERE user_id = ? AND asset = ?'
     );
     updateBalance.run(amount, amount, now, userId, asset);
+
+    console.log(`[Deposit Verify] Success: ${amount} ${asset} deposited for user ${userId}`);
 
     res.json({
       success: true,

@@ -107,7 +107,16 @@ export default function Deposit() {
       fetchBalances()
       fetchDepositRecords()
     } catch (err: any) {
-      setVerifyMsg({ type: 'error', text: err.message || '验证失败，请检查交易哈希是否正确' })
+      const errorMessage = err?.message || '验证失败，请检查交易哈希是否正确'
+      const formattedMsg = errorMessage.replace(/\n/g, '<br/>')
+      setVerifyMsg({ type: 'error', text: formattedMsg })
+      
+      if (err?.hotWalletAddress) {
+        console.log('Current hot wallet address:', err.hotWalletAddress)
+      }
+      if (err?.debug) {
+        console.log('Debug info:', err.debug)
+      }
     } finally {
       setVerifying(false)
     }
@@ -373,12 +382,14 @@ export default function Deposit() {
               </div>
               {verifyMsg && (
                 <div className={cn(
-                  "mt-3 p-3 rounded-lg text-sm",
+                  "mt-3 p-3 rounded-lg text-sm whitespace-pre-wrap",
                   verifyMsg.type === 'success'
                     ? "bg-success/10 text-success border border-success/20"
                     : "bg-danger/10 text-danger border border-danger/20"
                 )}>
-                  {verifyMsg.text}
+                  {verifyMsg.text.split('<br/>').map((line: string, i: number) => (
+                    <div key={i}>{line}</div>
+                  ))}
                 </div>
               )}
             </form>

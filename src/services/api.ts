@@ -26,7 +26,10 @@ async function request<T>(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error || 'Request failed');
+    const error: any = new Error(data.error || 'Request failed');
+    if (data.debug) error.debug = data.debug;
+    if (data.hotWalletAddress) error.hotWalletAddress = data.hotWalletAddress;
+    throw error;
   }
 
   return data;
