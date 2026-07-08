@@ -40,6 +40,12 @@ export default function Withdraw() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
+  const [feeDetail, setFeeDetail] = useState({
+    amount: 0,
+    fee: 0,
+    actualReceive: 0,
+  })
+
   const availableAssets = Object.keys(withdrawChains)
 
   const addressBook = [
@@ -60,6 +66,20 @@ export default function Withdraw() {
       setSelectedChainIndex(0)
     }
   }, [searchParams])
+
+  useEffect(() => {
+    const chainOptions = withdrawChains[selectedAsset] || [defaultChain]
+    const currentChain = chainOptions[selectedChainIndex] || defaultChain
+    const amountNum = parseFloat(amount) || 0
+    const fee = currentChain.fee
+    const actualReceive = Math.max(0, amountNum - fee)
+    
+    setFeeDetail({
+      amount: amountNum,
+      fee: fee,
+      actualReceive: actualReceive,
+    })
+  }, [amount, selectedAsset, selectedChainIndex])
 
   const chainOptions = withdrawChains[selectedAsset] || [defaultChain]
   const currentChain = chainOptions[selectedChainIndex] || defaultChain
@@ -296,15 +316,15 @@ export default function Withdraw() {
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-text-secondary">提现数量</span>
-                <span className="text-text-primary font-number">{formatAmount(amountNum, 6)} {selectedAsset}</span>
+                <span className="text-text-primary font-number">{formatAmount(feeDetail.amount, 6)} {selectedAsset}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-text-secondary">网络手续费</span>
-                <span className="text-text-primary font-number">{formatAmount(fee, 6)} {selectedAsset}</span>
+                <span className="text-text-primary font-number">{formatAmount(feeDetail.fee, 6)} {selectedAsset}</span>
               </div>
               <div className="border-t border-border/50 pt-2 flex items-center justify-between">
                 <span className="text-text-primary font-medium">实际到账</span>
-                <span className="text-success font-number font-bold text-lg">{formatAmount(actualReceive, 6)} {selectedAsset}</span>
+                <span className="text-success font-number font-bold text-lg">{formatAmount(feeDetail.actualReceive, 6)} {selectedAsset}</span>
               </div>
             </div>
           </div>
