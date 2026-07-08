@@ -78,6 +78,8 @@ export default function Withdraw() {
   const actualReceive = Math.max(0, amountNum - fee)
   const isAmountValid = amountNum >= currentChain.minWithdraw && amountNum + fee <= availableBalance && address.trim().length > 0
 
+  console.log('Withdraw debug:', { amount, amountNum, fee, actualReceive, selectedAsset, availableBalance })
+
   const handleWithdraw = async () => {
     if (!isAmountValid || loading) return
     setLoading(true)
